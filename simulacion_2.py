@@ -1,17 +1,20 @@
 import itertools
 import pandas as pd
 from collections import OrderedDict
+from collections import Counter
 import numpy as np
 import geopandas as gpd
 from numpy.random import RandomState
 import simpy
 import sys
 import time   #Para probar los tiempos de ejecucion
+import os
+
 
 class Family(object):
     ID=0
     families=[]
-    def __init__(self, env, members, housing, start_scape, velocity, route):
+    def __init__(self, env, members, housing, start_scape, velocity, route,meating_point):
         self.ID=Family.ID
         Family.ID+=1                    
         self.members = members          
@@ -20,6 +23,8 @@ class Family(object):
         self.velocity = velocity                
         self.route = route              
         self.env=env
+        self.meating_point=meating_point
+        self.building=0
 
         #The family go out
         self.env.process(self.evacuate())
@@ -43,7 +48,8 @@ class Family(object):
         object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
         # route=type_road[str(object_id)][0] #ESTO LO DEBO ACTIVAR CUANDO CARGUE LAS NUEVAS RUTAS
         route=type_road[str(object_id)][0]
-        return(route)
+        meating_point=type_road[str(object_id)][1]
+        return(route,meating_point)
 
     @staticmethod
     def get_velocity(members):
@@ -59,10 +65,10 @@ class Family(object):
         for element in house_id[:1]:
             members=Family.get_members(element)
             housing=element
-            route_home_mt=Family.get_route(element,type_road)
+            route,meating_point=Family.get_route(element,type_road)
             velocity=Family.get_velocity(members)
             start_scape=S.generate_startscape_rand(members)
-            Family.families.append(Family(env,members,housing,start_scape,velocity,route_home_mt))
+            Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point))
 
 
     def evacuate(self):
@@ -82,16 +88,32 @@ class Family(object):
             id_to_search=self.route.pop(0)
             street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
             print('Familia '+str(self.ID)+' llega a calle '+str(street_find.ID)+' en tiempo '+str(self.env.now))
-            if len(self.route)>0:
-                street_find.flow+=1
-                yield self.env.timeout(street_find.velocity)
-                street_find.flow-=1
-
-            else:
+            street_find.flow+=1
+            yield self.env.timeout(street_find.velocity)
+            street_find.flow-=1
+            if len(self.route)==0:
+                ###################
+                # Llegan al final de la ruta
+                ###################
+                id_to_search=self.meating_point    
+                meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
+                new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
+                meatingpoint_find.members=new_members
+                meatingpoint_find.persons+=self.members['males']+self.members['women']
+                print("meating point id: ",self.meating_point)
+                print("memebers in meating point: ",meatingpoint_find.members)
+                print("persons in meating point: ",meatingpoint_find.persons)
                 print("FIN")
-                break      
+                break
 
 
+
+    
+# id_to_search=Family.families[0].meating_point  
+# print(id_to_search)  
+# meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
+# print(meatingpoint_find)
+# sum(meatingpoint_find.members.values())
 
 class Street(object):
     streets=[]
@@ -127,15 +149,11 @@ class Street(object):
                 print("Faltan "+str(len(street_id)-contador)+' para que empieze la simulacion')
                 control+=1000
 
-
-'''
 class Building(object):
     buildings=[]
-    ID=0
 
-    def __init__(self,height):
-        self.ID=Building.ID
-        Building.ID+=1
+    def __init__(self,ID,height):
+        self.ID=ID
         self.height=height
         self.capacity=height*10
         self.num_family=0 
@@ -143,7 +161,24 @@ class Building(object):
     
     @classmethod
     def builder_building(cls):
-'''
+        for element in buildings['fid']:
+            ID=element
+            height=int(buildings.loc[buildings['fid']==element]['Base'].item())
+            Building.buildings.append(Building(ID,height))
+
+class MeatingPoint(object):
+    meating_points=[]
+
+    def __init__(self,ID):
+        self.ID=ID 
+        self.members={'adults':0,'youngs':0,'kids':0,'olds':0,'males':0,'women':0}
+        self.persons=0
+
+    @classmethod
+    def builder_Meatinpoint(cls):
+        for i in range(len(meating_points)):
+            ID=meating_points.loc[i].OBJECTID
+            MeatingPoint.meating_points.append(MeatingPoint(ID))
 
 class Streams(object):
     def __init__(self,startscape_seed):
@@ -165,7 +200,6 @@ class Streams(object):
             startscape_prob= (0.0,0.0,0.0,0.0,0.2,0.3,0.3,0.2)                  
         return(self.startscape_rand.choice(stratscape_vals,p=startscape_prob))   
 
-
 class Model(object):
     def __init__(self, seeds,simulation_time):
         self.startscape_seed=seeds[0]
@@ -176,12 +210,15 @@ class Model(object):
         S = Streams(self.startscape_seed)
         Family.builder_families(env,home_to_mt_load,S)
         Street.builder_streets()
+        Building.builder_building()
+        MeatingPoint.builder_Meatinpoint()
         env.run(until=self.simulation_time)
 
 
 
 if __name__ == '__main__':
     #Cargo datos
+    directory=os.getcwd()
     persons_data = pd.read_csv("data/personas_antofagasta.csv")
     synthetic_population=pd.read_csv('data/synthetic_population.csv')
     houses_to_evacuate=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Individual_Houses/House_to_evacuate/Houses_to_evacuate.shp')
@@ -195,34 +232,16 @@ if __name__ == '__main__':
     home_to_mt_load = np.load('data/caminos/home_to_mt.npy').item()
     home_to_bd_load = np.load('data/caminos/home_to_bd.npy').item()
     bd_to_mt_load = np.load('data/caminos/bd_to_mt.npy').item()
+    buildings=gpd.read_file('data/edificios/Edificios_zona_inundacion.shp')
+    meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Tsunami/Puntos_Encuentro/Puntos_Encuentro.shp')
 
-     
+
     seeds = list(zip(*3*[iter([i for i in range(1*3)])]))
     simulation_time=100
     Model(seeds,simulation_time).run()
 
 
 #TESTEO
-
-# def car(env):
-#     while True:
-#         print('Start parking at %d' % env.now)
-#         parking_duration = 5
-#         yield env.timeout(parking_duration)
-
-#         print('Start driving at %d' % env.now)
-#         trip_duration = 2
-#         yield env.timeout(trip_duration)
-#         if env.now == 14:
-#             print("hola")
-#             yield env.timeout(time_simulation-env.now)
-
-# env = simpy.Environment()
-# env.process(car(env))
-# time_simulation=20  
-# env.run(until=time_simulation)      
-
-
 #Por agregar cuando al simulacion ya funcione una vez
 '''
 class Replicator(object):
@@ -242,5 +261,4 @@ class Experiment(object):
         self.results = Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)    
 
 '''
-
 
