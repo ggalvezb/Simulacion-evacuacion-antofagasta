@@ -62,7 +62,7 @@ class Family(object):
     @classmethod
     def builder_families(cls,env,type_road,S):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
-        for element in house_id[:1]:
+        for element in house_id[:20]:
             members=Family.get_members(element)
             housing=element
             route,meating_point=Family.get_route(element,type_road)
@@ -75,8 +75,7 @@ class Family(object):
         ################
         # Salen de sus casas
         ################
-        print("Tiempo de simulacion: "+str(self.env.now))
-        print('Familia '+str(self.ID)+' inicia escape')
+        # print('Familia '+str(self.ID)+' inicia escape')
         yield self.env.timeout(self.start_scape)  
         
         while True:
@@ -84,10 +83,9 @@ class Family(object):
             ################
             # Inician una calle
             ################
-            print("Tiempo de simulacion: "+str(self.env.now))
             id_to_search=self.route.pop(0)
             street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
-            print('Familia '+str(self.ID)+' llega a calle '+str(street_find.ID)+' en tiempo '+str(self.env.now))
+            # print('Familia '+str(self.ID)+' llega a calle '+str(street_find.ID)+' en tiempo '+str(self.env.now))
             street_find.flow+=1
             yield self.env.timeout(street_find.velocity)
             street_find.flow-=1
@@ -95,14 +93,15 @@ class Family(object):
                 ###################
                 # Llegan al final de la ruta
                 ###################
+                print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point  ))
                 id_to_search=self.meating_point    
                 meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
                 new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
                 meatingpoint_find.members=new_members
                 meatingpoint_find.persons+=self.members['males']+self.members['women']
-                print("meating point id: ",self.meating_point)
-                print("memebers in meating point: ",meatingpoint_find.members)
-                print("persons in meating point: ",meatingpoint_find.persons)
+                # print("meating point id: ",self.meating_point)
+                # print("memebers in meating point: ",meatingpoint_find.members)
+                # print("persons in meating point: ",meatingpoint_find.persons)
                 print("FIN")
                 break
 
