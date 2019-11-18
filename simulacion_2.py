@@ -62,7 +62,7 @@ class Family(object):
     @classmethod
     def builder_families(cls,env,type_road,S):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
-        for element in house_id[:20]:
+        for element in house_id[:1000]:
             members=Family.get_members(element)
             housing=element
             route,meating_point=Family.get_route(element,type_road)
@@ -105,8 +105,29 @@ class Family(object):
                 print("FIN")
                 break
 
+list_id=[]
+for element in MeatingPoint.meating_points:
+    list_id.append(element.ID)
+    print(element.members)
+
+print(len(list_id))
 
 
+def checkIfDuplicates_1(listOfElems):
+    ''' Check if given list contains any duplicates '''
+    if len(listOfElems) == len(set(listOfElems)):
+        return False
+    else:
+        return True
+
+checkIfDuplicates_1(list_id)
+
+print("Cantidad de meating points: ",len(MeatingPoint.meating_points))
+MeatingPoint.meating_points[0].ID
+Family.families[0].housing
+Family.families[0].meating_point
+for element in Family.families:
+    print(element.meating_point)
     
 # id_to_search=Family.families[0].meating_point  
 # print(id_to_search)  
