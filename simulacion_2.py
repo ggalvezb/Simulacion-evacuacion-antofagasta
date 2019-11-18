@@ -204,6 +204,22 @@ class Model(object):
         env.run(until=self.simulation_time)
 
 
+class Replicator(object):
+    def __init__(self, seeds):
+        self.seeds=seeds
+
+    def run(self,params):
+        return [Model(seeds,*params).run() for seeds in self.seeds], params   
+
+
+class Experiment(object):
+    def __init__(self,num_replics,scenarios):
+        self.seeds = list(zip(*3*[iter([i for i in range(num_replics*3)])]))
+        self.scenarios = scenarios
+    
+    def run(self):
+        #Esto debería ir parelelizado para cada escenario
+        Replicator(self.seeds,scenarios).run    
 
 if __name__ == '__main__':
     #Cargo datos
@@ -225,29 +241,19 @@ if __name__ == '__main__':
     meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Tsunami/Puntos_Encuentro/Puntos_Encuentro_Antofagasta/puntos_de_encuentro.shp')
 
 
-    seeds = list(zip(*3*[iter([i for i in range(1*3)])]))
-    simulation_time=100
-    Model(seeds,simulation_time).run()
+    # seeds = list(zip(*3*[iter([i for i in range(1*3)])]))
+    # simulation_time=100
+    # Model(seeds,simulation_time).run()
+
+    time=100
+    scenarios = [('scenario 1',time),('scenario 2',time)]
+    exp = Experiment(1,scenarios)
+    exp.run()
 
 
-#TESTEO
-#Por agregar cuando al simulacion ya funcione una vez
-'''
-class Replicator(object):
-    def __init__(self, seeds):
-        self.seeds=seeds
 
-    def run(self,params):
-        return [Model(seeds,*params).run() for seeds in self.seeds], params   
 
-class Experiment(object):
-    def __init__(self,num_replics,scenarios=4):
-        self.seeds = list(zip(*3*[iter([i for i in range(num_replics*3)])]))
-        self.scenarios = scenarios
-    
-    def run(self):
-        cpu = mp.cpu_count()
-        self.results = Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)    
 
-'''
+
+
 
