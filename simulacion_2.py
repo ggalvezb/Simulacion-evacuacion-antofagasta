@@ -59,17 +59,17 @@ class Family(object):
         velocity=((kids*1.5)+(adults*1.3))/total_person
         return(velocity)
 
+
     @classmethod
     def builder_families(cls,env,type_road,S):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
-        for element in house_id[:1000]:
+        for element in house_id:
             members=Family.get_members(element)
-            housing=element
+            housing=list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['ObjectID'])[0]
             route,meating_point=Family.get_route(element,type_road)
             velocity=Family.get_velocity(members)
             start_scape=S.generate_startscape_rand(members)
             Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point))
-
 
     def evacuate(self):
         ################
@@ -102,38 +102,7 @@ class Family(object):
                 # print("meating point id: ",self.meating_point)
                 # print("memebers in meating point: ",meatingpoint_find.members)
                 # print("persons in meating point: ",meatingpoint_find.persons)
-                print("FIN")
                 break
-
-list_id=[]
-for element in MeatingPoint.meating_points:
-    list_id.append(element.ID)
-    print(element.members)
-
-print(len(list_id))
-
-
-def checkIfDuplicates_1(listOfElems):
-    ''' Check if given list contains any duplicates '''
-    if len(listOfElems) == len(set(listOfElems)):
-        return False
-    else:
-        return True
-
-checkIfDuplicates_1(list_id)
-
-print("Cantidad de meating points: ",len(MeatingPoint.meating_points))
-MeatingPoint.meating_points[0].ID
-Family.families[0].housing
-Family.families[0].meating_point
-for element in Family.families:
-    print(element.meating_point)
-    
-# id_to_search=Family.families[0].meating_point  
-# print(id_to_search)  
-# meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
-# print(meatingpoint_find)
-# sum(meatingpoint_find.members.values())
 
 class Street(object):
     streets=[]
@@ -253,7 +222,7 @@ if __name__ == '__main__':
     home_to_bd_load = np.load('data/caminos/home_to_bd.npy').item()
     bd_to_mt_load = np.load('data/caminos/bd_to_mt.npy').item()
     buildings=gpd.read_file('data/edificios/Edificios_zona_inundacion.shp')
-    meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Tsunami/Puntos_Encuentro/Puntos_Encuentro.shp')
+    meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Tsunami/Puntos_Encuentro/Puntos_Encuentro_Antofagasta/puntos_de_encuentro.shp')
 
 
     seeds = list(zip(*3*[iter([i for i in range(1*3)])]))
