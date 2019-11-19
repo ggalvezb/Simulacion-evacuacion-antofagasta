@@ -102,42 +102,6 @@ class Family(object):
                 meatingpoint_find.persons+=self.members['males']+self.members['women']
                 break
 
-
-# class Street(object):
-#     streets=[]
-
-#     def __init__(self,ID,height):
-#         self.ID=ID
-#         self.flow=0
-#         self.velocity=3.85 #Fast running speed
-#         self.height=height
-
-#     @staticmethod
-#     def get_height(ID):
-#         try:
-#             u=streets.loc[streets['id']==str(ID)]['u'].item()  
-#             v=streets.loc[streets['id']==str(ID)]['v'].item()
-#             u_height=int(nodes.loc[nodes['id']==str(u)]['Dem_2'].item())
-#             v_height=int(nodes.loc[nodes['id']==str(v)]['Dem_2'].item())
-#             return(abs(u_height-v_height)) 
-#         except:
-#             print("Que he fallao:"+str(ID))      
-
-#     @classmethod
-#     def builder_streets(cls):
-#         street_id=list(streets['id'])
-#         contador=0
-#         control=1000
-#         for element in street_id:
-#             ID=element
-#             height=streets.loc[streets['id']==str(element)]['height'].item()
-#             Street.streets.append(Street(ID,height))
-#             contador+=1
-#             if contador==control:
-#                 print("Faltan "+str(len(street_id)-contador)+' para que empieze la simulacion')
-#                 control+=1000
-
-
 class Street(object):
     streets=[]
 
