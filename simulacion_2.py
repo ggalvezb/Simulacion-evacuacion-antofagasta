@@ -10,6 +10,8 @@ import sys
 import time   #Para probar los tiempos de ejecucion
 import os
 
+from sklearn.externals.joblib import Parallel, delayed
+import multiprocessing as mp
 
 class Family(object):
     ID=0
@@ -190,9 +192,10 @@ class Streams(object):
         return(self.startscape_rand.choice(stratscape_vals,p=startscape_prob))   
 
 class Model(object):
-    def __init__(self, seeds,simulation_time):
+    def __init__(self, seeds,scenario,simulation_time):
         self.startscape_seed=seeds[0]
         self.simulation_time=simulation_time
+        self.scenario=scenario
 
     def run(self):
         env=simpy.Environment()
@@ -218,8 +221,10 @@ class Experiment(object):
         self.scenarios = scenarios
     
     def run(self):
-        #Esto debería ir parelelizado para cada escenario
-        Replicator(self.seeds,scenarios).run    
+        cpu = mp.cpu_count()
+        # self.results = Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
+        Replicator(self.seeds).run(self.scenarios)
+
 
 if __name__ == '__main__':
     #Cargo datos
