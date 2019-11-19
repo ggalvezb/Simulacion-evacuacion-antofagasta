@@ -194,8 +194,6 @@ class Model(object):
         MeatingPoint.builder_Meatinpoint()
         env.run(until=self.simulation_time)
 
-
-
 class Replicator(object):
     def __init__(self, seeds):
         self.seeds=seeds
@@ -203,7 +201,6 @@ class Replicator(object):
     def run(self,params):
         # return [Model(seeds,*params).run() for seeds in self.seeds], params
         return [Model(seeds,*params).run() for seeds in self.seeds]
-
 
 class Experiment(object):
     def __init__(self,num_replics,scenarios):
@@ -244,6 +241,6 @@ if __name__ == '__main__':
     time=100
     scenarios=[('scenario 1',time)]
     # scenarios = [('scenario 1',time),('scenario 2',time)]
-    exp = Experiment(1,scenarios)
+    exp = Experiment(2,scenarios)
     exp.run()
 
