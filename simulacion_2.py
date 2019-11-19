@@ -16,7 +16,7 @@ import multiprocessing as mp
 class Family(object):
     ID=0
     families=[]
-    def __init__(self, env, members, housing, start_scape, velocity, route,meating_point):
+    def __init__(self, env, members, housing, start_scape, velocity, route,meating_point,scenario):
         self.ID=Family.ID
         Family.ID+=1                    
         self.members = members          
@@ -27,6 +27,7 @@ class Family(object):
         self.env=env
         self.meating_point=meating_point
         self.building=0
+        self.scenario=scenario
 
         #Create the env for the family
         self.env.process(self.evacuate())
@@ -63,7 +64,7 @@ class Family(object):
 
 
     @classmethod
-    def builder_families(cls,env,type_road,S):
+    def builder_families(cls,env,type_road,S,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
         for element in house_id[:1000]:
             members=Family.get_members(element)
@@ -71,7 +72,7 @@ class Family(object):
             route,meating_point=Family.get_route(element,type_road)
             velocity=Family.get_velocity(members)
             start_scape=S.generate_startscape_rand(members)
-            Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point))
+            Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point,scenario))
 
 
     def evacuate(self):
@@ -79,9 +80,8 @@ class Family(object):
         # Salen de sus casas
         ################
         yield self.env.timeout(self.start_scape)  
-        
-        while True:
 
+        while True:
             ################
             # Inician una calle
             ################
@@ -94,13 +94,14 @@ class Family(object):
                 ###################
                 # Llegan al final de la ruta
                 ###################
-                print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point  ))
-                id_to_search=self.meating_point    
-                meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
-                new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
-                meatingpoint_find.members=new_members
-                meatingpoint_find.persons+=self.members['males']+self.members['women']
-                break
+                if self.scenario=='scenario 1':
+                    print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point  ))
+                    id_to_search=self.meating_point    
+                    meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
+                    new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
+                    meatingpoint_find.members=new_members
+                    meatingpoint_find.persons+=self.members['males']+self.members['women']
+                    break
 
 class Street(object):
     streets=[]
@@ -188,11 +189,13 @@ class Model(object):
         elif self.scenario=='scenario 2': route_scenario=home_to_bd_load
         env=simpy.Environment()
         S = Streams(self.startscape_seed)
-        Family.builder_families(env,route_scenario,S)
+        Family.builder_families(env,route_scenario,S,self.scenario)
         Street.builder_streets()
         Building.builder_building()
         MeatingPoint.builder_Meatinpoint()
         env.run(until=self.simulation_time)
+
+
 
 class Replicator(object):
     def __init__(self, seeds):
