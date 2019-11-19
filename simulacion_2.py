@@ -49,8 +49,8 @@ class Family(object):
     @staticmethod
     def get_route(element,type_road):
         object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
-        route=type_road[str(object_id)][0]
-        meating_point=type_road[str(object_id)][1]
+        route=type_road[str(object_id)][0].copy()
+        meating_point=int(type_road[str(object_id)][1])
         return(route,meating_point)
 
 
@@ -66,14 +66,18 @@ class Family(object):
     @classmethod
     def builder_families(cls,env,type_road,S,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
-        for element in house_id[:1000]:
+        for element in house_id[:5]:
             members=Family.get_members(element)
             housing=list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['ObjectID'])[0]
             route,meating_point=Family.get_route(element,type_road)
             velocity=Family.get_velocity(members)
             start_scape=S.generate_startscape_rand(members)
             Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point,scenario))
-
+    
+    @classmethod
+    def reset_class(cls):
+        cls.ID=0
+        cls.families=[]
 
     def evacuate(self):
         ################
@@ -95,6 +99,9 @@ class Family(object):
                 # Llegan al final de la ruta
                 ###################
                 if self.scenario=='scenario 1':
+                    ###########
+                    # Llegan a un punto de encuentro
+                    ###########
                     print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point  ))
                     id_to_search=self.meating_point    
                     meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
@@ -102,6 +109,20 @@ class Family(object):
                     meatingpoint_find.members=new_members
                     meatingpoint_find.persons+=self.members['males']+self.members['women']
                     break
+                elif self.scenario=='scenario 2':
+                    ###########
+                    # Llegan a un edificio
+                    ###########
+                    id_to_search=self.meating_point
+                    building_search=next(filter(lambda x: x.ID == id_to_search, Building.buildings))
+                    print('FAMILIA '+str(self.ID)+' LLEGAN A EDIFICO '+str(building_search.ID)+' Y ESTE SE ENCUENTRA '+str(building_search.state))
+                    if building_search.state == 'open':
+                        building_search.num_family+=1
+                        building_search.capacity-=self.members['males']+self.members['women']
+                        if building_search.capacity<=0: building_search.state='close'
+                    break
+
+
 
 class Street(object):
     streets=[]
@@ -126,6 +147,9 @@ class Street(object):
                 print("Faltan "+str(len(street_id)-contador)+' para que empieze la simulacion')
                 control+=1000
 
+    @classmethod
+    def reset_class(cls):
+        cls.streets=[]            
 
 class Building(object):
     buildings=[]
@@ -144,6 +168,10 @@ class Building(object):
             height=int(buildings.loc[buildings['fid']==element]['Base'].item())
             Building.buildings.append(Building(ID,height))
 
+    @classmethod
+    def reset_class(cls):
+        cls.buildings=[]        
+
 class MeatingPoint(object):
     meating_points=[]
 
@@ -157,6 +185,11 @@ class MeatingPoint(object):
         for i in range(len(meating_points)):
             ID=meating_points.loc[i].OBJECTID
             MeatingPoint.meating_points.append(MeatingPoint(ID))
+
+    @classmethod
+    def reset_class(cls):
+        cls.meating_points=[]        
+
 
 class Streams(object):
     def __init__(self,startscape_seed):
@@ -180,7 +213,8 @@ class Streams(object):
 
 class Model(object):
     def __init__(self, seeds,scenario,simulation_time):
-        self.startscape_seed=seeds[0]
+        self.startscape_seed=seeds
+        print("seed 2: ",self.startscape_seed)
         self.simulation_time=simulation_time
         self.scenario=scenario
 
@@ -194,7 +228,11 @@ class Model(object):
         Building.builder_building()
         MeatingPoint.builder_Meatinpoint()
         env.run(until=self.simulation_time)
-
+        #Termino la replica y reinicio las clases
+        # Family.reset_class()
+        Street.reset_class()
+        Building.reset_class()
+        MeatingPoint.reset_class()
 
 
 class Replicator(object):
@@ -237,13 +275,9 @@ if __name__ == '__main__':
     meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Tsunami/Puntos_Encuentro/Puntos_Encuentro_Antofagasta/puntos_de_encuentro.shp')
 
 
-    # seeds = list(zip(*3*[iter([i for i in range(1*3)])]))
-    # simulation_time=100
-    # Model(seeds,simulation_time).run()
-
-    time=100
-    scenarios=[('scenario 1',time)]
+    time=300
+    scenarios=[('scenario 2',time)]
     # scenarios = [('scenario 1',time),('scenario 2',time)]
-    exp = Experiment(2,scenarios)
+    exp = Experiment(1,scenarios)
     exp.run()
 
