@@ -28,7 +28,7 @@ class Family(object):
         self.meating_point=meating_point
         self.building=0
 
-        #The family go out
+        #Create the env for the family
         self.env.process(self.evacuate())
 
 
@@ -48,10 +48,10 @@ class Family(object):
     @staticmethod
     def get_route(element,type_road):
         object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
-        # route=type_road[str(object_id)][0] #ESTO LO DEBO ACTIVAR CUANDO CARGUE LAS NUEVAS RUTAS
         route=type_road[str(object_id)][0]
         meating_point=type_road[str(object_id)][1]
         return(route,meating_point)
+
 
     @staticmethod
     def get_velocity(members):
@@ -65,7 +65,7 @@ class Family(object):
     @classmethod
     def builder_families(cls,env,type_road,S):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
-        for element in house_id:
+        for element in house_id[:1000]:
             members=Family.get_members(element)
             housing=list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['ObjectID'])[0]
             route,meating_point=Family.get_route(element,type_road)
@@ -73,11 +73,11 @@ class Family(object):
             start_scape=S.generate_startscape_rand(members)
             Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point))
 
+
     def evacuate(self):
         ################
         # Salen de sus casas
         ################
-        # print('Familia '+str(self.ID)+' inicia escape')
         yield self.env.timeout(self.start_scape)  
         
         while True:
@@ -87,7 +87,6 @@ class Family(object):
             ################
             id_to_search=self.route.pop(0)
             street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
-            # print('Familia '+str(self.ID)+' llega a calle '+str(street_find.ID)+' en tiempo '+str(self.env.now))
             street_find.flow+=1
             yield self.env.timeout(street_find.velocity)
             street_find.flow-=1
@@ -101,10 +100,43 @@ class Family(object):
                 new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
                 meatingpoint_find.members=new_members
                 meatingpoint_find.persons+=self.members['males']+self.members['women']
-                # print("meating point id: ",self.meating_point)
-                # print("memebers in meating point: ",meatingpoint_find.members)
-                # print("persons in meating point: ",meatingpoint_find.persons)
                 break
+
+
+# class Street(object):
+#     streets=[]
+
+#     def __init__(self,ID,height):
+#         self.ID=ID
+#         self.flow=0
+#         self.velocity=3.85 #Fast running speed
+#         self.height=height
+
+#     @staticmethod
+#     def get_height(ID):
+#         try:
+#             u=streets.loc[streets['id']==str(ID)]['u'].item()  
+#             v=streets.loc[streets['id']==str(ID)]['v'].item()
+#             u_height=int(nodes.loc[nodes['id']==str(u)]['Dem_2'].item())
+#             v_height=int(nodes.loc[nodes['id']==str(v)]['Dem_2'].item())
+#             return(abs(u_height-v_height)) 
+#         except:
+#             print("Que he fallao:"+str(ID))      
+
+#     @classmethod
+#     def builder_streets(cls):
+#         street_id=list(streets['id'])
+#         contador=0
+#         control=1000
+#         for element in street_id:
+#             ID=element
+#             height=streets.loc[streets['id']==str(element)]['height'].item()
+#             Street.streets.append(Street(ID,height))
+#             contador+=1
+#             if contador==control:
+#                 print("Faltan "+str(len(street_id)-contador)+' para que empieze la simulacion')
+#                 control+=1000
+
 
 class Street(object):
     streets=[]
@@ -115,30 +147,20 @@ class Street(object):
         self.velocity=3.85 #Fast running speed
         self.height=height
 
-    @staticmethod
-    def get_height(ID):
-        try:
-            u=streets.loc[streets['id']==str(ID)]['u'].item()  
-            v=streets.loc[streets['id']==str(ID)]['v'].item()
-            u_height=int(nodes.loc[nodes['id']==str(u)]['Dem_2'].item())
-            v_height=int(nodes.loc[nodes['id']==str(v)]['Dem_2'].item())
-            return(abs(u_height-v_height)) 
-        except:
-            print("Que he fallao:"+str(ID))      
-
     @classmethod
     def builder_streets(cls):
         street_id=list(streets['id'])
         contador=0
         control=1000
-        for element in street_id:
-            ID=element
-            height=Street.get_height(ID)
+        for i in range(len(streets)):
+            ID=streets.loc[i]['id']
+            height=streets.loc[i]['height']
             Street.streets.append(Street(ID,height))
             contador+=1
             if contador==control:
                 print("Faltan "+str(len(street_id)-contador)+' para que empieze la simulacion')
                 control+=1000
+
 
 class Building(object):
     buildings=[]
@@ -198,13 +220,16 @@ class Model(object):
         self.scenario=scenario
 
     def run(self):
+        if self.scenario=='scenario 1': route_scenario=home_to_mt_load
+        elif self.scenario=='scenario 2': route_scenario=home_to_bd_load
         env=simpy.Environment()
         S = Streams(self.startscape_seed)
-        Family.builder_families(env,home_to_mt_load,S)
+        Family.builder_families(env,route_scenario,S)
         Street.builder_streets()
         Building.builder_building()
         MeatingPoint.builder_Meatinpoint()
         env.run(until=self.simulation_time)
+
 
 
 class Replicator(object):
@@ -212,7 +237,8 @@ class Replicator(object):
         self.seeds=seeds
 
     def run(self,params):
-        return [Model(seeds,*params).run() for seeds in self.seeds], params   
+        # return [Model(seeds,*params).run() for seeds in self.seeds], params
+        return [Model(seeds,*params).run() for seeds in self.seeds]
 
 
 class Experiment(object):
@@ -223,7 +249,8 @@ class Experiment(object):
     def run(self):
         cpu = mp.cpu_count()
         # self.results = Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
-        Replicator(self.seeds).run(self.scenarios)
+        for scenario in self.scenarios:
+            Replicator(self.seeds).run(scenario)
 
 
 if __name__ == '__main__':
@@ -236,7 +263,7 @@ if __name__ == '__main__':
     #ID mayor a 2219 en nodos es un edificio!!!!!
     people_to_evacuate=synthetic_population.merge(houses_to_evacuate,how='left',left_on='ObjectID',right_on='OBJECTID')
     people_to_evacuate=people_to_evacuate.dropna(subset=['OBJECTID'])
-    streets=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/Antofa_edges.shp')
+    streets=gpd.read_file('data/calles_con_delta_altura/calles_delta_altura.shp')
     nodes=gpd.read_file('data/nodos_con_altura/Antofa_nodes_altura.shp')
     #ID mayor a 4439 en streets es una calle de edificio!!!!!
     home_to_mt_load = np.load('data/caminos/home_to_mt.npy').item()
@@ -251,14 +278,8 @@ if __name__ == '__main__':
     # Model(seeds,simulation_time).run()
 
     time=100
-    scenarios = [('scenario 1',time),('scenario 2',time)]
+    scenarios=[('scenario 1',time)]
+    # scenarios = [('scenario 1',time),('scenario 2',time)]
     exp = Experiment(1,scenarios)
     exp.run()
-
-
-
-
-
-
-
 
