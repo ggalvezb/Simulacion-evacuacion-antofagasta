@@ -115,13 +115,32 @@ class Family(object):
                     ###########
                     id_to_search=self.meating_point
                     building_search=next(filter(lambda x: x.ID == id_to_search, Building.buildings))
-                    print('FAMILIA '+str(self.ID)+' LLEGAN A EDIFICO '+str(building_search.ID)+' Y ESTE SE ENCUENTRA '+str(building_search.state))
+                    print('FAMILIA '+str(self.ID)+' LLEGAN A EDIFICO '+str(building_search.ID)+' Y ESTE SE ENCUENTRA '+str(building_search.state)+' EN TIEMPO '+str(self.env.now))
                     if building_search.state == 'open':
                         building_search.num_family+=1
                         building_search.capacity-=self.members['males']+self.members['women']
                         if building_search.capacity<=0: building_search.state='close'
+                    else:
+                        self.route=bd_to_mt_load[str(self.housing)][0]
+                        self.meating_point=bd_to_mt_load[str(self.housing)][1]
+                        while True:
+                            id_to_search=self.route.pop(0)
+                            street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
+                            street_find.flow+=1
+                            yield self.env.timeout(street_find.velocity)
+                            street_find.flow-=1
+                            if len(self.route)==0:
+                                ###########
+                                # Llegan a un punto de encuentro
+                                ###########
+                                print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point)+'EN TIEMPO '+str(self.env.now))
+                                id_to_search=self.meating_point    
+                                meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
+                                new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
+                                meatingpoint_find.members=new_members
+                                meatingpoint_find.persons+=self.members['males']+self.members['women']
+                                break
                     break
-
 
 
 class Street(object):
@@ -157,7 +176,7 @@ class Building(object):
     def __init__(self,ID,height):
         self.ID=ID
         self.height=height
-        self.capacity=height*10
+        self.capacity=2
         self.num_family=0 
         self.state='open'
     
@@ -275,9 +294,9 @@ if __name__ == '__main__':
     meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Tsunami/Puntos_Encuentro/Puntos_Encuentro_Antofagasta/puntos_de_encuentro.shp')
 
 
-    time=300
-    scenarios=[('scenario 2',time)]
-    # scenarios = [('scenario 1',time),('scenario 2',time)]
+    time=500
+    # scenarios=[('scenario 2',time)]
+    scenarios = [('scenario 1',time),('scenario 2',time)]
     exp = Experiment(1,scenarios)
     exp.run()
 
