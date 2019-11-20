@@ -66,7 +66,7 @@ class Family(object):
     @classmethod
     def builder_families(cls,env,type_road,S,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
-        for element in house_id[:5]:
+        for element in house_id[:1000]:
             members=Family.get_members(element)
             housing=list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['ObjectID'])[0]
             route,meating_point=Family.get_route(element,type_road)
@@ -121,6 +121,9 @@ class Family(object):
                         building_search.capacity-=self.members['males']+self.members['women']
                         if building_search.capacity<=0: building_search.state='close'
                     else:
+                        ##########
+                        # Si el edificio esta cerrado se van a un punto de encuentro
+                        ##########
                         self.route=bd_to_mt_load[str(self.housing)][0]
                         self.meating_point=bd_to_mt_load[str(self.housing)][1]
                         while True:
@@ -133,7 +136,7 @@ class Family(object):
                                 ###########
                                 # Llegan a un punto de encuentro
                                 ###########
-                                print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point)+'EN TIEMPO '+str(self.env.now))
+                                print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point)+' EN TIEMPO '+str(self.env.now))
                                 id_to_search=self.meating_point    
                                 meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
                                 new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
@@ -141,7 +144,6 @@ class Family(object):
                                 meatingpoint_find.persons+=self.members['males']+self.members['women']
                                 break
                     break
-
 
 class Street(object):
     streets=[]
@@ -176,7 +178,7 @@ class Building(object):
     def __init__(self,ID,height):
         self.ID=ID
         self.height=height
-        self.capacity=2
+        self.capacity=height*10
         self.num_family=0 
         self.state='open'
     
@@ -208,7 +210,6 @@ class MeatingPoint(object):
     @classmethod
     def reset_class(cls):
         cls.meating_points=[]        
-
 
 class Streams(object):
     def __init__(self,startscape_seed):
@@ -246,13 +247,12 @@ class Model(object):
         Street.builder_streets()
         Building.builder_building()
         MeatingPoint.builder_Meatinpoint()
-        env.run(until=self.simulation_time)
+        env.run()
         #Termino la replica y reinicio las clases
         # Family.reset_class()
         Street.reset_class()
         Building.reset_class()
         MeatingPoint.reset_class()
-
 
 class Replicator(object):
     def __init__(self, seeds):
@@ -269,9 +269,9 @@ class Experiment(object):
     
     def run(self):
         cpu = mp.cpu_count()
-        # self.results = Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
-        for scenario in self.scenarios:
-            Replicator(self.seeds).run(scenario)
+        self.results = Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
+        # for scenario in self.scenarios:
+        #     Replicator(self.seeds).run(scenario)
 
 
 if __name__ == '__main__':
