@@ -57,16 +57,17 @@ class Family(object):
     @staticmethod
     def get_velocity(members):
         kids=members['kids']
-        adults=members['adults']+members['youngs']+members['olds']
+        adults=members['adults']+members['youngs']
+        olds=members['olds']
         total_person=kids+adults
-        velocity=((kids*1.5)+(adults*1.3))/total_person
+        velocity=((kids*1.3)+(adults*1.5)+(olds*0.948))/total_person
         return(velocity)
 
 
     @classmethod
     def builder_families(cls,env,type_road,S,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
-        for element in house_id[:1000]:
+        for element in house_id[:5]:
             members=Family.get_members(element)
             housing=list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['ObjectID'])[0]
             route,meating_point=Family.get_route(element,type_road)
@@ -92,7 +93,9 @@ class Family(object):
             id_to_search=self.route.pop(0)
             street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
             street_find.flow+=1
-            yield self.env.timeout(street_find.velocity)
+            if street_find.flow>street_find.capacity: street_find.velocity=0.751 
+            velocity=min(street_find.velocity,self.velocity)
+            yield self.env.timeout(velocity*street_find.lenght)
             street_find.flow-=1
             if len(self.route)==0:
                 ###################
@@ -127,10 +130,15 @@ class Family(object):
                         self.route=bd_to_mt_load[str(self.housing)][0]
                         self.meating_point=bd_to_mt_load[str(self.housing)][1]
                         while True:
+                            ##########
+                            # Vuelven a calle
+                            ##########
                             id_to_search=self.route.pop(0)
                             street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
                             street_find.flow+=1
-                            yield self.env.timeout(street_find.velocity)
+                            if street_find.flow>street_find.capacity: street_find.velocity=0.751 
+                            velocity=min(street_find.velocity,self.velocity)
+                            yield self.env.timeout(velocity*street_find.lenght)
                             street_find.flow-=1
                             if len(self.route)==0:
                                 ###########
@@ -148,11 +156,33 @@ class Family(object):
 class Street(object):
     streets=[]
 
-    def __init__(self,ID,height):
+    def __init__(self,ID,height,type_street,lenght,capacity,velocity):
         self.ID=ID
         self.flow=0
-        self.velocity=3.85 #Fast running speed
+        self.velocity=velocity
         self.height=height
+        self.type=type_street
+        self.lenght=lenght
+        self.capacity=int(capacity)  #Si se supera este valor se considera atochado y la calle baja su velocidad a 0.751 m/s
+
+    @staticmethod
+    def get_capacity(type_street,lenght):
+        if type_street=='residential': width=4 
+        elif type_street=='primary': width=8
+        elif type_street=='tertiary': width=2
+        else: width=4
+        area=width*lenght
+        return(area*1.55)  #Se considera que con 1.55 personas por m2 se puede transitar libremente
+
+    @staticmethod
+    def get_velocity(height):
+        if height<5.6: velocity=3.85
+        elif 5.6<height<=8: velocity=0.91
+        elif 8<height<=11.2: velocity=0.76
+        elif 11.2<height<=14: velocity=0.60
+        elif 14<height<=30: velocity=0.31
+        elif 30<=height: velocity=0.02
+        return(velocity)
 
     @classmethod
     def builder_streets(cls):
@@ -162,7 +192,11 @@ class Street(object):
         for i in range(len(streets)):
             ID=streets.loc[i]['id']
             height=streets.loc[i]['height']
-            Street.streets.append(Street(ID,height))
+            type_street=streets.loc[i]['highway']
+            lenght=streets.loc[i]['length']
+            capacity=Street.get_capacity(type_street,lenght)
+            velocity=Street.get_velocity(height)
+            Street.streets.append(Street(ID,height,type_street,lenght,capacity,velocity))
             contador+=1
             if contador==control:
                 print("Faltan "+str(len(street_id)-contador)+' para que empieze la simulacion')
@@ -170,7 +204,8 @@ class Street(object):
 
     @classmethod
     def reset_class(cls):
-        cls.streets=[]            
+        cls.streets=[]   
+               
 
 class Building(object):
     buildings=[]
@@ -247,12 +282,13 @@ class Model(object):
         Street.builder_streets()
         Building.builder_building()
         MeatingPoint.builder_Meatinpoint()
+        sys.exit()
         env.run()
         #Termino la replica y reinicio las clases
         # Family.reset_class()
-        Street.reset_class()
-        Building.reset_class()
-        MeatingPoint.reset_class()
+        # Street.reset_class()
+        # Building.reset_class()
+        # MeatingPoint.reset_class()
 
 class Replicator(object):
     def __init__(self, seeds):
@@ -269,9 +305,9 @@ class Experiment(object):
     
     def run(self):
         cpu = mp.cpu_count()
-        self.results = Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
-        # for scenario in self.scenarios:
-        #     Replicator(self.seeds).run(scenario)
+        # self.results = Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
+        for scenario in self.scenarios:
+            Replicator(self.seeds).run(scenario)
 
 
 if __name__ == '__main__':
@@ -294,9 +330,10 @@ if __name__ == '__main__':
     meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Tsunami/Puntos_Encuentro/Puntos_Encuentro_Antofagasta/puntos_de_encuentro.shp')
 
 
+
     time=500
-    # scenarios=[('scenario 2',time)]
-    scenarios = [('scenario 1',time),('scenario 2',time)]
+    scenarios=[('scenario 2',time)]
+    # scenarios = [('scenario 1',time),('scenario 2',time)]
     exp = Experiment(1,scenarios)
     exp.run()
 
