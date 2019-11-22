@@ -47,12 +47,35 @@ class Family(object):
         return members
     
     @staticmethod
-    def get_route(element,type_road):
-        object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
-        route=type_road[str(object_id)][0].copy()
-        meating_point=int(type_road[str(object_id)][1])
-        return(route,meating_point)
+    def get_route_length(route):
+        route_length=0
+        for street in route:
+            street_find = next(filter(lambda x: x.ID == street, Street.streets))
+            route_length+=street_find.lenght
+        return(route_length)    
 
+
+    @staticmethod
+    def get_route(element,type_road,scenario):
+        if scenario=='scenario 1':
+            object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
+            route=type_road[str(object_id)][0].copy()
+            meating_point=int(type_road[str(object_id)][1])
+        elif scenario=='scenario 2':
+            object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
+            route_to_mt=home_to_mt_load[str(object_id)][0]
+            length_route_to_mt=Family.get_route_length(route_to_mt)
+            meating_point=int(home_to_mt_load[str(object_id)][1]) 
+            route_to_bd=home_to_bd_load[str(object_id)][0]
+            length_route_to_bd=Family.get_route_length(route_to_bd)
+            building=int(home_to_bd_load[str(object_id)][1])
+            prob_go_bd=length_route_to_mt/(length_route_to_mt+length_route_to_bd)
+            prob_go_mt=length_route_to_bd/(length_route_to_mt+length_route_to_bd)
+            print("MT: "+str(prob_go_mt)+"  "+str(length_route_to_mt)+"    BD: "+str(prob_go_bd)+"  "+str(length_route_to_bd))
+            route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
+            if route==route_to_mt: meating_point=meating_point 
+            elif route==route_to_bd:meating_point=building
+        return(route,meating_point)
 
     @staticmethod
     def get_velocity(members):
@@ -70,7 +93,7 @@ class Family(object):
         for element in house_id[:5]:
             members=Family.get_members(element)
             housing=list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['ObjectID'])[0]
-            route,meating_point=Family.get_route(element,type_road)
+            route,meating_point=Family.get_route(element,type_road,scenario)
             velocity=Family.get_velocity(members)
             start_scape=S.generate_startscape_rand(members)
             Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point,scenario))
@@ -278,11 +301,12 @@ class Model(object):
         elif self.scenario=='scenario 2': route_scenario=home_to_bd_load
         env=simpy.Environment()
         S = Streams(self.startscape_seed)
-        Family.builder_families(env,route_scenario,S,self.scenario)
         Street.builder_streets()
+        Family.builder_families(env,route_scenario,S,self.scenario)
+        sys.exit()
         Building.builder_building()
         MeatingPoint.builder_Meatinpoint()
-        sys.exit()
+        
         env.run()
         #Termino la replica y reinicio las clases
         # Family.reset_class()
@@ -336,4 +360,9 @@ if __name__ == '__main__':
     # scenarios = [('scenario 1',time),('scenario 2',time)]
     exp = Experiment(1,scenarios)
     exp.run()
+
+
+
+
+
 
