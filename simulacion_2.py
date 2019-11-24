@@ -60,7 +60,7 @@ class Family(object):
         if scenario=='scenario 1':
             object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
             route=type_road[str(object_id)][0].copy()
-            meating_point=int(type_road[str(object_id)][1])
+            meating_point=(int(type_road[str(object_id)][1]),'MP')
         elif scenario=='scenario 2':
             object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
             route_to_mt=home_to_mt_load[str(object_id)][0]
@@ -71,10 +71,10 @@ class Family(object):
             building=int(home_to_bd_load[str(object_id)][1])
             prob_go_bd=length_route_to_mt/(length_route_to_mt+length_route_to_bd)
             prob_go_mt=length_route_to_bd/(length_route_to_mt+length_route_to_bd)
-            print("MT: "+str(prob_go_mt)+"  "+str(length_route_to_mt)+"    BD: "+str(prob_go_bd)+"  "+str(length_route_to_bd))
+            # print("MT: "+str(prob_go_mt)+"  "+str(length_route_to_mt)+"    BD: "+str(prob_go_bd)+"  "+str(length_route_to_bd))
             route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
-            if route==route_to_mt: meating_point=meating_point 
-            elif route==route_to_bd:meating_point=building
+            if route==route_to_mt: meating_point=(meating_point,'MP') 
+            elif route==route_to_bd:meating_point=(building,'BD')
         return(route,meating_point)
 
     @staticmethod
@@ -120,25 +120,17 @@ class Family(object):
             velocity=min(street_find.velocity,self.velocity)
             yield self.env.timeout(velocity*street_find.lenght)
             street_find.flow-=1
-            if len(self.route)==0:
-                ###################
-                # Llegan al final de la ruta
-                ###################
-                if self.scenario=='scenario 1':
-                    ###########
-                    # Llegan a un punto de encuentro
-                    ###########
+            if len(self.route)==0: #Final de ruta
+                if self.meating_point[1]=='MP': #Llega a punto de encuentro
                     print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point  ))
-                    id_to_search=self.meating_point    
+                    id_to_search=self.meating_point[0]    
                     meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
                     new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
                     meatingpoint_find.members=new_members
                     meatingpoint_find.persons+=self.members['males']+self.members['women']
                     break
-                elif self.scenario=='scenario 2':
-                    ###########
-                    # Llegan a un edificio
-                    ###########
+
+                elif self.meating_point[1]=='BD': #Llega a edificio
                     id_to_search=self.meating_point
                     building_search=next(filter(lambda x: x.ID == id_to_search, Building.buildings))
                     print('FAMILIA '+str(self.ID)+' LLEGAN A EDIFICO '+str(building_search.ID)+' Y ESTE SE ENCUENTRA '+str(building_search.state)+' EN TIEMPO '+str(self.env.now))
@@ -303,7 +295,7 @@ class Model(object):
         S = Streams(self.startscape_seed)
         Street.builder_streets()
         Family.builder_families(env,route_scenario,S,self.scenario)
-        sys.exit()
+        # sys.exit()
         Building.builder_building()
         MeatingPoint.builder_Meatinpoint()
         
