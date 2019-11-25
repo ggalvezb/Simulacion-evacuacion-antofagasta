@@ -9,6 +9,7 @@ import simpy
 import sys
 import time   #Para probar los tiempos de ejecucion
 import os
+import time
 
 #Para el modelo de optimizacion
 import cplex
@@ -22,14 +23,15 @@ import multiprocessing as mp
 class Family(object):
     ID=0
     families=[]
-    def __init__(self, env, members, housing, start_scape, velocity, route,meating_point,scenario):
+    def __init__(self, env, members, housing, start_scape, velocity, route,meating_point,scenario,route_lenght):
         self.ID=Family.ID
         Family.ID+=1                    
         self.members = members          
         self.housing = housing           
         self.start_scape = start_scape  
         self.velocity = velocity                
-        self.route = route              
+        self.route = route   
+        self.route_lenght=route_lenght           
         self.env=env
         self.meating_point=meating_point
         self.scenario=scenario
@@ -64,6 +66,7 @@ class Family(object):
         if scenario=='scenario 1':
             object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
             route=type_road[str(object_id)][0].copy()
+            length_route=Family.get_route_length(route)
             meating_point=(int(type_road[str(object_id)][1]),'MP')
 
         elif scenario=='scenario 2':
@@ -77,14 +80,20 @@ class Family(object):
             prob_go_bd=length_route_to_mt/(length_route_to_mt+length_route_to_bd)
             prob_go_mt=length_route_to_bd/(length_route_to_mt+length_route_to_bd)
             route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
-            if route==route_to_mt: meating_point=(meating_point,'MP') 
-            elif route==route_to_bd:meating_point=(building,'BD')
+            if route==route_to_mt: 
+                meating_point=(meating_point,'MP')
+                length_route=length_route_to_mt 
+            elif route==route_to_bd:
+                meating_point=(building,'BD')
+                length_route=length_route_to_bd
+
         elif scenario=='scenario 3':
             object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
             route=home_to_bd_load[str(object_id)][0]
+            length_route=Family.get_route_length(route)
             building=int(home_to_bd_load[str(object_id)][1])
             meating_point=(building,'BD')
-        return(route,meating_point)
+        return(route,meating_point,length_route)
 
     @staticmethod
     def get_velocity(members):
@@ -102,10 +111,10 @@ class Family(object):
         for element in house_id:
             members=Family.get_members(element)
             housing=list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['ObjectID'])[0]
-            route,meating_point=Family.get_route(element,type_road,scenario)
+            route,meating_point,length_route=Family.get_route(element,type_road,scenario)
             velocity=Family.get_velocity(members)
             start_scape=S.generate_startscape_rand(members)
-            Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point,scenario))
+            Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point,scenario,length_route))
         if scenario=='scenario 3':
             Family.optimization_model()
 
@@ -119,25 +128,30 @@ class Family(object):
         print("EMPIEZA MODELO OPTI")
         #################
         # Modelo de opti
-        # ###############    
-        num_families=len(Family.families)
-        num_buildings=len(Building.buildings)
+        # ############### 
         T_exec=3600
         olds_fam=[]
         building_distance=[]
         cap_bd=[]
         num_members=[]
+        start=time.time()
         for element in Family.families:
-            olds_fam.append(element.members['olds'])
-            building_distance.append(Family.get_route_length(element.route))
-            num_members.append(element.members['males']+element.members['women'])   
+            if element.route_lenght<=300:
+                olds_fam.append(element.members['olds'])
+                building_distance.append(element.route_lenght)
+                num_members.append(element.members['males']+element.members['women'])   
         for element in Building.buildings:
             cap_bd.append(int(element.capacity))
+        num_families=len(olds_fam)
+        num_buildings=len(cap_bd)
 
-
+        end=time.time()
+        print("Termina carga de datos del modelo y se demoro ",end-start)
        ####### Variables de decision ##########
 
         Model=cplex.Cplex()
+        print("Empieza la creacion de variables ")
+        start=time.time()
 
         x_vars = np.array([["x("+str(i)+","+str(j)+")"  for j in range(0,num_buildings)] for i in range(0,num_families)])
         x_varnames = x_vars.flatten()
@@ -149,7 +163,7 @@ class Family(object):
             for j in range(num_buildings):   
                 x_varobj.append(float(olds_fam[i]))
 
-     
+   
         Model.variables.add(obj = x_varobj, lb = x_varlb, ub = x_varub, types = x_vartypes, names = x_varnames)
         Model.objective.set_sense(Model.objective.sense.maximize)
         ####### Restricciones #######
@@ -161,14 +175,17 @@ class Family(object):
                 val.append(float(num_members[i]))
             Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val = val)], senses = 'L', rhs = [float(cap_bd[j])])
 
-        for i in range(num_families):
-            for j in range(num_buildings):
-                ind=[x_vars[i,j]]
-                val=[building_distance[i]]
-                Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val = val)], senses = 'L', rhs = [float(300)])        
-        
+        # for i in range(num_families):
+        #     for j in range(num_buildings):
+        #         ind=[x_vars[i,j]]
+        #         val=[building_distance[i]]
+        #         Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val = val)], senses = 'L', rhs = [float(300)])        
+        # end=time.time()
+        print("Termina creacion de modelo con tiempo de ",end-start)
+
         Model.parameters.timelimit.set(float(T_exec))
         Model.parameters.workmem.set(9000.0)
+        print("EMPIEZA SOLVE")
         Model.solve()
 
         print("\nObjective Function Value = {}".format(Model.solution.get_objective_value()))
