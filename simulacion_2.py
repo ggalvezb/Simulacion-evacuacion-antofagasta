@@ -72,7 +72,7 @@ class Family(object):
             prob_go_bd=length_route_to_mt/(length_route_to_mt+length_route_to_bd)
             prob_go_mt=length_route_to_bd/(length_route_to_mt+length_route_to_bd)
             # print("MT: "+str(prob_go_mt)+"  "+str(length_route_to_mt)+"    BD: "+str(prob_go_bd)+"  "+str(length_route_to_bd))
-            route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
+            route=np.random.choice([route_to_mt,route_to_bd],p=[0,1])
             if route==route_to_mt: meating_point=(meating_point,'MP') 
             elif route==route_to_bd:meating_point=(building,'BD')
         return(route,meating_point)
@@ -131,7 +131,7 @@ class Family(object):
                     break
 
                 elif self.meating_point[1]=='BD': #Llega a edificio
-                    id_to_search=self.meating_point
+                    id_to_search=self.meating_point[0]
                     building_search=next(filter(lambda x: x.ID == id_to_search, Building.buildings))
                     print('FAMILIA '+str(self.ID)+' LLEGAN A EDIFICO '+str(building_search.ID)+' Y ESTE SE ENCUENTRA '+str(building_search.state)+' EN TIEMPO '+str(self.env.now))
                     if building_search.state == 'open':
@@ -220,15 +220,14 @@ class Street(object):
     @classmethod
     def reset_class(cls):
         cls.streets=[]   
-               
-
+ 
 class Building(object):
     buildings=[]
 
     def __init__(self,ID,height):
         self.ID=ID
         self.height=height
-        self.capacity=height*10
+        self.capacity=2   #height*10
         self.num_family=0 
         self.state='open'
     
