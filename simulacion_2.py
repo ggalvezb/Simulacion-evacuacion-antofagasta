@@ -10,6 +10,12 @@ import sys
 import time   #Para probar los tiempos de ejecucion
 import os
 
+#Para el modelo de optimizacion
+import cplex
+from cplex import Cplex
+from cplex.exceptions import CplexError
+
+#Para paralelizar
 from sklearn.externals.joblib import Parallel, delayed
 import multiprocessing as mp
 
@@ -26,7 +32,6 @@ class Family(object):
         self.route = route              
         self.env=env
         self.meating_point=meating_point
-        self.building=0
         self.scenario=scenario
 
         #Create the env for the family
@@ -54,13 +59,13 @@ class Family(object):
             route_length+=street_find.lenght
         return(route_length)    
 
-
     @staticmethod
     def get_route(element,type_road,scenario):
         if scenario=='scenario 1':
             object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
             route=type_road[str(object_id)][0].copy()
             meating_point=(int(type_road[str(object_id)][1]),'MP')
+
         elif scenario=='scenario 2':
             object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
             route_to_mt=home_to_mt_load[str(object_id)][0]
@@ -71,10 +76,14 @@ class Family(object):
             building=int(home_to_bd_load[str(object_id)][1])
             prob_go_bd=length_route_to_mt/(length_route_to_mt+length_route_to_bd)
             prob_go_mt=length_route_to_bd/(length_route_to_mt+length_route_to_bd)
-            # print("MT: "+str(prob_go_mt)+"  "+str(length_route_to_mt)+"    BD: "+str(prob_go_bd)+"  "+str(length_route_to_bd))
-            route=np.random.choice([route_to_mt,route_to_bd],p=[0,1])
+            route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
             if route==route_to_mt: meating_point=(meating_point,'MP') 
             elif route==route_to_bd:meating_point=(building,'BD')
+        elif scenario=='scenario 3':
+            object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
+            route=home_to_bd_load[str(object_id)][0]
+            building=int(home_to_bd_load[str(object_id)][1])
+            meating_point=(building,'BD')
         return(route,meating_point)
 
     @staticmethod
@@ -82,7 +91,7 @@ class Family(object):
         kids=members['kids']
         adults=members['adults']+members['youngs']
         olds=members['olds']
-        total_person=kids+adults
+        total_person=kids+adults+olds
         velocity=((kids*1.3)+(adults*1.5)+(olds*0.948))/total_person
         return(velocity)
 
@@ -90,18 +99,90 @@ class Family(object):
     @classmethod
     def builder_families(cls,env,type_road,S,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
-        for element in house_id[:5]:
+        for element in house_id:
             members=Family.get_members(element)
             housing=list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['ObjectID'])[0]
             route,meating_point=Family.get_route(element,type_road,scenario)
             velocity=Family.get_velocity(members)
             start_scape=S.generate_startscape_rand(members)
             Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point,scenario))
-    
+        if scenario=='scenario 3':
+            Family.optimization_model()
+
     @classmethod
     def reset_class(cls):
         cls.ID=0
         cls.families=[]
+    
+
+    def optimization_model():
+        print("EMPIEZA MODELO OPTI")
+        #################
+        # Modelo de opti
+        # ###############    
+        num_families=len(Family.families)
+        num_buildings=len(Building.buildings)
+        T_exec=3600
+        olds_fam=[]
+        building_distance=[]
+        cap_bd=[]
+        num_members=[]
+        for element in Family.families:
+            olds_fam.append(element.members['olds'])
+            building_distance.append(Family.get_route_length(element.route))
+            num_members.append(element.members['males']+element.members['women'])   
+        for element in Building.buildings:
+            cap_bd.append(int(element.capacity))
+
+
+       ####### Variables de decision ##########
+
+        Model=cplex.Cplex()
+
+        x_vars = np.array([["x("+str(i)+","+str(j)+")"  for j in range(0,num_buildings)] for i in range(0,num_families)])
+        x_varnames = x_vars.flatten()
+        x_vartypes = 'B'*len(x_varnames)
+        x_varlb = [0.0]*len(x_varnames)
+        x_varub = [1.0]*len(x_varnames)
+        x_varobj = []
+        for i in range(num_families):
+            for j in range(num_buildings):   
+                x_varobj.append(float(olds_fam[i]))
+
+     
+        Model.variables.add(obj = x_varobj, lb = x_varlb, ub = x_varub, types = x_vartypes, names = x_varnames)
+        Model.objective.set_sense(Model.objective.sense.maximize)
+        ####### Restricciones #######
+        for j in range(num_buildings):
+            ind=[]
+            val=[]
+            for i in range(num_families):
+                ind.append(x_vars[i,j])
+                val.append(float(num_members[i]))
+            Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val = val)], senses = 'L', rhs = [float(cap_bd[j])])
+
+        for i in range(num_families):
+            for j in range(num_buildings):
+                ind=[x_vars[i,j]]
+                val=[building_distance[i]]
+                Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val = val)], senses = 'L', rhs = [float(300)])        
+        
+        Model.parameters.timelimit.set(float(T_exec))
+        Model.parameters.workmem.set(9000.0)
+        Model.solve()
+
+        print("\nObjective Function Value = {}".format(Model.solution.get_objective_value()))
+
+        # for i in range(0,N):
+        #     for j in range(0,N):
+        #         for k in range(K):
+        #             for d in range(D):
+        #                 if(Model.solution.get_values("x("+str(i)+","+str(j)+","+str(k)+","+str(d)+")")!=0.0):
+        #                     print("x("+str(i)+","+str(j)+","+str(k)+","+str(d)+")"+" = "+str(Model.solution.get_values("x("+str(i)+","+str(j)+","+str(k)+","+str(d)+")")))
+        # print("")
+
+        sys.exit()
+
 
     def evacuate(self):
         ################
@@ -227,7 +308,7 @@ class Building(object):
     def __init__(self,ID,height):
         self.ID=ID
         self.height=height
-        self.capacity=2   #height*10
+        self.capacity=(height/3)*5
         self.num_family=0 
         self.state='open'
     
@@ -290,15 +371,17 @@ class Model(object):
     def run(self):
         if self.scenario=='scenario 1': route_scenario=home_to_mt_load
         elif self.scenario=='scenario 2': route_scenario=home_to_bd_load
+        else: route_scenario=home_to_bd_load
         env=simpy.Environment()
         S = Streams(self.startscape_seed)
         Street.builder_streets()
-        Family.builder_families(env,route_scenario,S,self.scenario)
         # sys.exit()
         Building.builder_building()
         MeatingPoint.builder_Meatinpoint()
+        Family.builder_families(env,route_scenario,S,self.scenario)
         
         env.run()
+
         #Termino la replica y reinicio las clases
         # Family.reset_class()
         # Street.reset_class()
@@ -347,13 +430,24 @@ if __name__ == '__main__':
 
 
     time=500
-    scenarios=[('scenario 2',time)]
+    scenarios=[('scenario 3',time)]
     # scenarios = [('scenario 1',time),('scenario 2',time)]
     exp = Experiment(1,scenarios)
     exp.run()
 
 
 
+#Test optimizador
 
+# num_familias=len(Family.families)
+# num_edificios=len(Building.buildings)
+# t_exec=3600
 
+# olds_fam=[]
+# building_distance=[]
+# for elemnt in Family.families:
+#     olds_fam.append(elemnt.members['olds'])
+#     object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
+#     route_to_bd=home_to_bd_load[str(object_id)][0]
+#     length_route_to_bd=Family.get_route_length(route_to_bd)
 
