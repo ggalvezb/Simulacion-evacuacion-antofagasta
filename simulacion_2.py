@@ -9,7 +9,6 @@ import simpy
 import sys
 import time   #Para probar los tiempos de ejecucion
 import os
-import time
 
 #Para el modelo de optimizacion
 import cplex
@@ -20,10 +19,13 @@ from cplex.exceptions import CplexError
 from sklearn.externals.joblib import Parallel, delayed
 import multiprocessing as mp
 
+#Para crear grafos y obtener camino minimo
+import igraph
+
 class Family(object):
     ID=0
     families=[]
-    def __init__(self, env, members, housing, start_scape, velocity, route,meating_point,scenario,route_lenght):
+    def __init__(self, env, members, housing, start_scape, velocity, route,meating_point,scenario,route_lenght,geometry):
         self.ID=Family.ID
         Family.ID+=1                    
         self.members = members          
@@ -35,6 +37,7 @@ class Family(object):
         self.env=env
         self.meating_point=meating_point
         self.scenario=scenario
+        self.geometry=geometry
 
         #Create the env for the family
         self.env.process(self.evacuate())
@@ -62,15 +65,15 @@ class Family(object):
         return(route_length)    
 
     @staticmethod
-    def get_route(element,type_road,scenario):
+    def get_route(element,type_road,scenario,house_df):
         if scenario=='scenario 1':
-            object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
+            object_id=str(int(list(house_df['OBJECTID'])[0]))
             route=type_road[str(object_id)][0].copy()
             length_route=Family.get_route_length(route)
             meating_point=(int(type_road[str(object_id)][1]),'MP')
 
         elif scenario=='scenario 2':
-            object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
+            object_id=str(int(list(house_df['OBJECTID'])[0]))
             route_to_mt=home_to_mt_load[str(object_id)][0]
             length_route_to_mt=Family.get_route_length(route_to_mt)
             meating_point=int(home_to_mt_load[str(object_id)][1]) 
@@ -88,8 +91,9 @@ class Family(object):
                 length_route=length_route_to_bd
 
         elif scenario=='scenario 3':
-            object_id=str(int(list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['OBJECTID'])[0]))
+            object_id=str(int(list(house_df['OBJECTID'])[0]))
             route=home_to_bd_load[str(object_id)][0]
+            start=time.time()
             length_route=Family.get_route_length(route)
             building=int(home_to_bd_load[str(object_id)][1])
             meating_point=(building,'BD')
@@ -104,17 +108,20 @@ class Family(object):
         velocity=((kids*1.3)+(adults*1.5)+(olds*0.948))/total_person
         return(velocity)
 
-
     @classmethod
     def builder_families(cls,env,type_road,S,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
+        start=time.time()
         for element in house_id:
             members=Family.get_members(element)
-            housing=list(people_to_evacuate.loc[people_to_evacuate['House ID']==element]['ObjectID'])[0]
-            route,meating_point,length_route=Family.get_route(element,type_road,scenario)
+            house_df=people_to_evacuate.loc[people_to_evacuate['House ID']==element]
+            housing=list(house_df['ObjectID'])[0]
+            geometry=list(house_df['geometry'])[0]
+            route,meating_point,length_route=Family.get_route(element,type_road,scenario,house_df)
             velocity=Family.get_velocity(members)
             start_scape=S.generate_startscape_rand(members)
-            Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point,scenario,length_route))
+            Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point,scenario,length_route,geometry))
+        print("fin construir familias ", (time.time())-start)
         if scenario=='scenario 3':
             Family.optimization_model()
 
@@ -129,59 +136,69 @@ class Family(object):
         #################
         # Modelo de opti
         # ############### 
-        T_exec=3600
+        start=time.time()
+        T_exec=30
         olds_fam=[]
+        kids_fam=[]
+        id_fams=[]
         building_distance=[]
         cap_bd=[]
         num_members=[]
-        start=time.time()
+        id_buildings=[]
         for element in Family.families:
-            if element.route_lenght<=300:
+            if element.route_lenght<=300 and element.members['olds']>0 or element.members['kids']>0:
                 olds_fam.append(element.members['olds'])
+                kids_fam.append(element.members['kids'])
                 building_distance.append(element.route_lenght)
+                id_fams.append(element.housing)
                 num_members.append(element.members['males']+element.members['women'])   
         for element in Building.buildings:
             cap_bd.append(int(element.capacity))
+            id_buildings.append(element.ID)
         num_families=len(olds_fam)
         num_buildings=len(cap_bd)
-
-        end=time.time()
-        print("Termina carga de datos del modelo y se demoro ",end-start)
+        len(Family.families)
+        print("Termina carga de datos del modelo y se demoro ",(time.time())-start)
        ####### Variables de decision ##########
 
         Model=cplex.Cplex()
         print("Empieza la creacion de variables ")
         start=time.time()
 
-        x_vars = np.array([["x("+str(i)+","+str(j)+")"  for j in range(0,num_buildings)] for i in range(0,num_families)])
+        x_vars = np.array([["x("+str(id_fams[i])+","+str(id_buildings[j])+")"  for j in range(0,num_buildings)] for i in range(0,num_families)])
         x_varnames = x_vars.flatten()
         x_vartypes = 'B'*len(x_varnames)
         x_varlb = [0.0]*len(x_varnames)
         x_varub = [1.0]*len(x_varnames)
-        x_varobj = []
-        for i in range(num_families):
-            for j in range(num_buildings):   
-                x_varobj.append(float(olds_fam[i]))
+        x_varobj=[0.7*olds_fam[i]+0.3*kids_fam[i] for j in range(num_buildings) for i in range(num_families)]
 
-   
         Model.variables.add(obj = x_varobj, lb = x_varlb, ub = x_varub, types = x_vartypes, names = x_varnames)
         Model.objective.set_sense(Model.objective.sense.maximize)
         ####### Restricciones #######
-        for j in range(num_buildings):
-            ind=[]
-            val=[]
-            for i in range(num_families):
-                ind.append(x_vars[i,j])
-                val.append(float(num_members[i]))
-            Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val = val)], senses = 'L', rhs = [float(cap_bd[j])])
 
-        # for i in range(num_families):
-        #     for j in range(num_buildings):
-        #         ind=[x_vars[i,j]]
-        #         val=[building_distance[i]]
-        #         Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val = val)], senses = 'L', rhs = [float(300)])        
-        # end=time.time()
-        print("Termina creacion de modelo con tiempo de ",end-start)
+        for j in range(num_buildings):
+            ind=[x_vars[i,j] for i in range(num_families)]
+            val=[num_members[i] for i in range(num_families)]
+            Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val = val)], 
+                                        senses = ['L'], 
+                                        rhs = [cap_bd[j]])
+
+        for i in range(num_families):
+            ind=[x_vars[i,j] for j in range(num_buildings)]
+            val=[1.0 for j in range(num_buildings)]
+            Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val =val )], 
+                                        senses = ['L'], 
+                                        rhs = [1.0])
+
+        
+        Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind=[x_vars[i,j]],val=[building_distance[i]]) for i in range(num_families) for j in range(num_buildings)], 
+                                                senses =['L'for i in range(num_families) for j in range(num_buildings)], 
+                                                rhs = [500 for i in range(num_families) for j in range(num_buildings)])   
+
+        
+
+        end=time.time()
+        print("Termina creacion de modelo con tiempo de ",(time.time())-start)
 
         Model.parameters.timelimit.set(float(T_exec))
         Model.parameters.workmem.set(9000.0)
@@ -189,16 +206,54 @@ class Family(object):
         Model.solve()
 
         print("\nObjective Function Value = {}".format(Model.solution.get_objective_value()))
+        
+        #Creacion de grafo
+        g = igraph.Graph(directed = True)
+        g.add_vertices(list(nodes.id))
+        g.add_edges(list(zip(streets.u, streets.v)))
+        g.es['id']=list(streets['id'])
+        g.es['length']=list(streets['length'])
 
-        # for i in range(0,N):
-        #     for j in range(0,N):
-        #         for k in range(K):
-        #             for d in range(D):
-        #                 if(Model.solution.get_values("x("+str(i)+","+str(j)+","+str(k)+","+str(d)+")")!=0.0):
-        #                     print("x("+str(i)+","+str(j)+","+str(k)+","+str(d)+")"+" = "+str(Model.solution.get_values("x("+str(i)+","+str(j)+","+str(k)+","+str(d)+")")))
-        # print("")
+        #Min distancia
+        def min_dist(point, gpd2):
+            gpd2['Dist'] = gpd2.apply(lambda row:  point.distance(row.geometry),axis=1)
+            geoseries = gpd2.iloc[gpd2['Dist'].argmin()]
+            return geoseries
 
-        sys.exit()
+        print("INICIA CREADOR DE RUTAS")
+        start=time.time()
+        #Creacion de rutas de escape
+        path={}
+        for i in range(2,3):
+            for j in range(0,num_buildings):
+                if(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")")!=0.0):
+                    print("x("+str(id_fams[i])+","+str(id_buildings[j])+")"+" = "+str(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")")))
+                    family = next(filter(lambda x: x.housing == id_fams[i], Family.families))
+                    point=family.geometry
+                    inicio_id=min_dist(point, nodes_without_buildings)['id']
+                    inicio_vertex=g.vs.find(name=str(inicio_id)).index
+                    building=next(filter(lambda x: x.ID == id_buildings[j], Building.buildings))
+                    print(building.geometry)
+                    fin_point_bd=building.geometry
+                    fin_id_bd=min_dist(fin_point_bd, nodes)['id']
+                    fin_vertex_bd=g.vs.find(name=str(fin_id_bd)).index
+                    shortest_path=g.get_shortest_paths(inicio_vertex, to=fin_vertex_bd, weights=g.es['length'], mode=igraph.OUT, output="epath")[0]
+                    path_id=[]
+                    for j in range(len(shortest_path)):
+                        path_id.append(g.es[shortest_path[j]]['id'])
+                    print(path_id)
+        print("termina el creador de rutas en tiempo ",(time.time())-start)
+
+                    # print("x("+str(id_fams[i])+","+str(id_buildings[j])+")"+" = "+str(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")")))
+
+        def get_route_length(route):
+            route_length=0
+            for street in route:
+                street_find = next(filter(lambda x: x.ID == street, Street.streets))
+                route_length+=street_find.lenght
+            return(route_length)
+        get_route_length(path_id)                    
+
 
 
     def evacuate(self):
@@ -322,19 +377,22 @@ class Street(object):
 class Building(object):
     buildings=[]
 
-    def __init__(self,ID,height):
+    def __init__(self,ID,height,geometry):
         self.ID=ID
         self.height=height
         self.capacity=(height/3)*5
         self.num_family=0 
         self.state='open'
+        self.geometry=geometry
     
     @classmethod
     def builder_building(cls):
         for element in buildings['fid']:
-            ID=element
-            height=int(buildings.loc[buildings['fid']==element]['Base'].item())
-            Building.buildings.append(Building(ID,height))
+            ID=int(element)
+            building=buildings.loc[buildings['fid']==element]
+            height=int(building['Base'].item())
+            geometry=building['geometry'].item()
+            Building.buildings.append(Building(ID,height,geometry))
 
     @classmethod
     def reset_class(cls):
@@ -395,6 +453,7 @@ class Model(object):
         # sys.exit()
         Building.builder_building()
         MeatingPoint.builder_Meatinpoint()
+        print("EMPIEZA CONSTRUCCION DE FAMILIA")
         Family.builder_families(env,route_scenario,S,self.scenario)
         
         env.run()
@@ -443,11 +502,12 @@ if __name__ == '__main__':
     bd_to_mt_load = np.load('data/caminos/bd_to_mt.npy').item()
     buildings=gpd.read_file('data/edificios/Edificios_zona_inundacion.shp')
     meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Tsunami/Puntos_Encuentro/Puntos_Encuentro_Antofagasta/puntos_de_encuentro.shp')
+    nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
 
 
 
-    time=500
-    scenarios=[('scenario 3',time)]
+    time_sim=500
+    scenarios=[('scenario 3',time_sim)]
     # scenarios = [('scenario 1',time),('scenario 2',time)]
     exp = Experiment(1,scenarios)
     exp.run()
