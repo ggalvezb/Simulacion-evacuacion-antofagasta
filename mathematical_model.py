@@ -19,7 +19,8 @@ houses_to_evacuate.OBJECTID=houses_to_evacuate.OBJECTID.astype(int)
 #ID mayor a 2219 en nodos es un edificio!!!!!
 people_to_evacuate=synthetic_population.merge(houses_to_evacuate,how='left',left_on='ObjectID',right_on='OBJECTID')
 people_to_evacuate=people_to_evacuate.dropna(subset=['OBJECTID'])
-streets=gpd.read_file('data/calles_con_delta_altura/calles_delta_altura.shp')
+# streets=gpd.read_file('data/calles_con_delta_altura/calles_delta_altura.shp')
+streets=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/Antofa_edges.shp')
 nodes=gpd.read_file('data/nodos_con_altura/Antofa_nodes_altura.shp')
 #ID mayor a 4439 en streets es una calle de edificio!!!!!
 home_to_mt_load = np.load('data/caminos/home_to_mt.npy').item()
@@ -177,49 +178,76 @@ def get_route(family_point,building_point):
     inicio_vertex=g.vs.find(name=str(inicio_id)).index
     fin_id_bd=min_dist(building_point, nodes)['id']
     fin_vertex_bd=g.vs.find(name=str(fin_id_bd)).index
-    shortest_path=g.get_shortest_paths(inicio_vertex, to=fin_vertex_bd, weights=g.es['length'], mode=igraph.OUT, output="epath")[0]
-    path_id=[]
-    for j in range(len(shortest_path)):
-        path_id.append(g.es[shortest_path[j]]['id'])
-    return(path_id)
-    
+    # shortest_path=g.get_shortest_paths(inicio_vertex, to=fin_vertex_bd, weights=g.es['length'], mode=igraph.OUT, output="epath")[0]
+    # path_id=[]
+    # for j in range(len(shortest_path)):
+    #     path_id.append(g.es[shortest_path[j]]['id'])
+    return(inicio_vertex,fin_vertex_bd)
+
+def get_vertex(point):
+    inicio_id=min_dist(point, nodes_without_buildings)['id']
+    inicio_vertex=g.vs.find(name=str(inicio_id)).index
+    return(inicio_vertex)
+
+
+
     
 print("EMPIEZA MODELO OPTI")
 #################
 # Modelo de opti
 # ############### 
+
+#Parametros de las familias
 start=time.time()
 T_exec=30
 olds_fam=[]
 kids_fam=[]
 id_fams=[]
 building_distance=[]
-cap_bd=[]
 num_members=[]
-id_buildings=[]
+family_vertex=[]
+
+i=0
 for element in Family.families:
     if element.route_lenght<=500 and (element.members['olds']>0 or element.members['kids']>0):
         olds_fam.append(element.members['olds'])
         kids_fam.append(element.members['kids'])
         id_fams.append(element.housing)
         num_members.append(element.members['males']+element.members['women'])
-        for building in Building.buildings:
-            building_distance.append(get_route_length(get_route(element.geometry,building.geometry)))
-
+        family_vertex.append(get_vertex(element.geometry))
+        # for building in Building.buildings:
+        #     building_distance.append(get_route_length(get_route(element.geometry,building.geometry)))
 num_families=len(olds_fam)
-num_buildings=len(cap_bd)
 
+#Parametros de los edificios/puntos de encuentro
+id_buildings=[]
+cap_bd=[]
+building_vertex=[]
+buildings[buildings['Base']==90]
+building_distance=pd.DataFrame()
 for element in Building.buildings:
+    print("Edificio id: ",element.ID)
     cap_bd.append(int(element.capacity))
     id_buildings.append(element.ID)
+    building_vertex_temp=get_vertex(element.geometry)
+    building_vertex.append(building_vertex_temp)
+    building_distance[element.ID]=g.shortest_paths_dijkstra(source=family_vertex,target=building_vertex_temp,weights=g.es['length'],mode=igraph.ALL)
+num_buildings=len(cap_bd)
+
+#Arreglo de dataframe
+building_distance_2=pd.DataFrame()
+for columns in building_distance.columns:
+    distance=[element[0] for element in building_distance[columns]]
+    building_distance_2[columns]=distance
+
 
 #Guardar distancias a edificio
-distnacias_a_edificios=pd.DataFrame(building_distance,columns=['Valor'])
-distnacias_a_edificios.to_csv('Distancias_2.csv')
+building_distance_2.to_csv('Distancias.csv')
 
 #Cargar distancia a edificio
-distances=list(pd.read_csv('Distancias.csv')['Valor'])
-distances=np.resize(distances,(num_families,10))
+distances=pd.read_csv('Distancias.csv')
+distances=distances.drop(['Unnamed: 0'],axis=1)
+distances=distances.values
 
 
 
@@ -263,9 +291,15 @@ for i in range(num_families):
                                 rhs = [1.0])
 
 
-Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind=[x_vars[i,j]],val=[building_distance[i]]) for i in range(num_families) for j in range(num_buildings)], 
+# for i in range(num_families):
+#      for j in range(num_buildings):
+#          Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind=[x_vars[i,j]],val=[distances[i,j]])], 
+#                                         senses =['L'], 
+#                                         rhs = [500])   
+
+Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind=[x_vars[i,j]],val=[distances[i,j]]) for i in range(num_families) for j in range(num_buildings)], 
                                         senses =['L'for i in range(num_families) for j in range(num_buildings)], 
-                                        rhs = [500 for i in range(num_families) for j in range(num_buildings)])   
+                                        rhs = [895 for i in range(num_families) for j in range(num_buildings)])   
 
 
 
