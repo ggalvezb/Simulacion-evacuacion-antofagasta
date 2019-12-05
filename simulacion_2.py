@@ -195,8 +195,6 @@ class Family(object):
                                 break
                     break
 
-
-
 class Street(object):
     streets=[]
 

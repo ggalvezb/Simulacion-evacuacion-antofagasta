@@ -10,6 +10,7 @@ import cplex
 from cplex import Cplex
 from cplex.exceptions import CplexError
 import igraph
+import sys
 
 #Cargo datos
 persons_data = pd.read_csv("data/personas_antofagasta.csv")
@@ -224,25 +225,25 @@ id_buildings=[]
 cap_bd=[]
 building_vertex=[]
 buildings[buildings['Base']==90]
-building_distance=pd.DataFrame()
+# building_distance=pd.DataFrame()
 for element in Building.buildings:
     print("Edificio id: ",element.ID)
     cap_bd.append(int(element.capacity))
     id_buildings.append(element.ID)
     building_vertex_temp=get_vertex(element.geometry)
     building_vertex.append(building_vertex_temp)
-    building_distance[element.ID]=g.shortest_paths_dijkstra(source=family_vertex,target=building_vertex_temp,weights=g.es['length'],mode=igraph.ALL)
+    # building_distance[element.ID]=g.shortest_paths_dijkstra(source=family_vertex,target=building_vertex_temp,weights=g.es['length'],mode=igraph.ALL)
 num_buildings=len(cap_bd)
 
-#Arreglo de dataframe
-building_distance_2=pd.DataFrame()
-for columns in building_distance.columns:
-    distance=[element[0] for element in building_distance[columns]]
-    building_distance_2[columns]=distance
+# #Arreglo de dataframe
+# building_distance_2=pd.DataFrame()
+# for columns in building_distance.columns:
+#     distance=[element[0] for element in building_distance[columns]]
+#     building_distance_2[columns]=distance
 
 
 #Guardar distancias a edificio
-building_distance_2.to_csv('Distancias.csv')
+# building_distance_2.to_csv('Distancias.csv')
 
 #Cargar distancia a edificio
 distances=pd.read_csv('Distancias.csv')
@@ -322,11 +323,21 @@ for i in range(0,num_families):
     for j in range(0,num_buildings):
         if(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")")!=0.0):
             print("x("+str(id_fams[i])+","+str(id_buildings[j])+")"+" = "+str(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")")))
+            family_find = next(filter(lambda x: x.housing == id_fams[i], Family.families))
+            building_find=next(filter(lambda x: x.ID==id_buildings[j],Building.buildings))
+            inicio_id=min_dist(family_find.geometry, nodes_without_buildings)['id']
+            inicio_vertex=g.vs.find(name=str(inicio_id)).index
+            try:
+                fin_id_bd=min_dist(building_find.geometry.item(), nodes)['id']
+            except:
+                fin_id_bd=min_dist(building_find.geometry, nodes)['id'] 
+            fin_vertex_bd=g.vs.find(name=str(fin_id_bd)).index
+            shortest_path=g.get_shortest_paths(inicio_vertex, to=fin_vertex_bd, weights=g.es['length'], mode=igraph.ALL, output="epath")[0]
+            path_id=[]
+            for j in range(len(shortest_path)):
+                path_id.append(g.es[shortest_path[j]]['id'])
+            path[id_fams[i]]=[path_id,id_buildings[j]]
+np.save('scape_route_optimal.npy', path)
 
-            print(path_id)
 print("termina el creador de rutas en tiempo ",(time.time())-start)
 
-            # print("x("+str(id_fams[i])+","+str(id_buildings[j])+")"+" = "+str(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")")))
-
-
-get_route_length(path_id)     
