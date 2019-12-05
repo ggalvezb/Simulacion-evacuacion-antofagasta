@@ -22,6 +22,7 @@ import multiprocessing as mp
 #Para crear grafos y obtener camino minimo
 import igraph
 
+inicio=time.time()
 class Family(object):
     ID=0
     families=[]
@@ -92,10 +93,16 @@ class Family(object):
 
         elif scenario=='scenario 3':
             object_id=str(int(list(house_df['OBJECTID'])[0]))
-            route=home_to_bd_load[str(object_id)][0]
-            length_route=Family.get_route_length(route)
-            building=int(home_to_bd_load[str(object_id)][1])
-            meating_point=(building,'BD')
+            if int(object_id) in optimal_scape.keys():
+                route=optimal_scape[int(object_id)][0]
+                length_route=Family.get_route_length(route)
+                building=int(optimal_scape[int(object_id)][1])
+                meating_point=(building,'BD')
+            else:
+                route=home_to_mt_load[str(object_id)][0]
+                length_route=Family.get_route_length(route)
+                building=int(home_to_mt_load[str(object_id)][1])
+                meating_point=(building,'BD')
         return(route,meating_point,length_route)
   
 
@@ -122,8 +129,7 @@ class Family(object):
             start_scape=S.generate_startscape_rand(members)
             Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point,scenario,length_route,geometry))
         print("fin construir familias ", (time.time())-start)
-        if scenario=='scenario 3':
-            Family.optimization_model()
+        sys.exit()
 
     @classmethod
     def reset_class(cls):
@@ -140,13 +146,14 @@ class Family(object):
             ################
             # Inician una calle
             ################
-            id_to_search=self.route.pop(0)
-            street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
-            street_find.flow+=1
-            if street_find.flow>street_find.capacity: street_find.velocity=0.751 
-            velocity=min(street_find.velocity,self.velocity)
-            yield self.env.timeout(velocity*street_find.lenght)
-            street_find.flow-=1
+            if len(self.route)!=0:
+                id_to_search=self.route.pop(0)
+                street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
+                street_find.flow+=1
+                if street_find.flow>street_find.capacity: street_find.velocity=0.751 
+                velocity=min(street_find.velocity,self.velocity)
+                yield self.env.timeout(velocity*street_find.lenght)
+                street_find.flow-=1
             if len(self.route)==0: #Final de ruta
                 if self.meating_point[1]=='MP': #Llega a punto de encuentro
                     print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point  ))
@@ -324,7 +331,6 @@ class Model(object):
         env=simpy.Environment()
         S = Streams(self.startscape_seed)
         Street.builder_streets()
-        # sys.exit()
         Building.builder_building()
         MeatingPoint.builder_Meatinpoint()
         print("EMPIEZA CONSTRUCCION DE FAMILIA")
@@ -374,6 +380,7 @@ if __name__ == '__main__':
     home_to_mt_load = np.load('data/caminos/home_to_mt.npy').item()
     home_to_bd_load = np.load('data/caminos/home_to_bd.npy').item()
     bd_to_mt_load = np.load('data/caminos/bd_to_mt.npy').item()
+    optimal_scape=np.load('data/scape_route_optimal.npy').item()
     buildings=gpd.read_file('data/edificios/Edificios_zona_inundacion.shp')
     meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Tsunami/Puntos_Encuentro/Puntos_Encuentro_Antofagasta/puntos_de_encuentro.shp')
     nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
@@ -386,7 +393,8 @@ if __name__ == '__main__':
     exp = Experiment(1,scenarios)
     exp.run()
 
-
+termino=time.time()
+print('TIEMPO TOTAL ',str(inicio-termino))
 
 #Test optimizador
 
