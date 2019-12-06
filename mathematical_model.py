@@ -334,10 +334,17 @@ for i in range(0,num_families):
             fin_vertex_bd=g.vs.find(name=str(fin_id_bd)).index
             shortest_path=g.get_shortest_paths(inicio_vertex, to=fin_vertex_bd, weights=g.es['length'], mode=igraph.ALL, output="epath")[0]
             path_id=[]
-            for j in range(len(shortest_path)):
-                path_id.append(g.es[shortest_path[j]]['id'])
+            for z in range(len(shortest_path)):
+                path_id.append(g.es[shortest_path[z]]['id'])
             path[id_fams[i]]=[path_id,id_buildings[j]]
+
+
+#Guardar diccionario
 np.save('scape_route_optimal.npy', path)
+
+#cargar diccionario
+optimal_scape=np.load('data/scape_route_optimal.npy').item()
+optimal_scape[27350]
 
 print("termina el creador de rutas en tiempo ",(time.time())-start)
 

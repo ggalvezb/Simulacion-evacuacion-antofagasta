@@ -97,12 +97,15 @@ class Family(object):
                 route=optimal_scape[int(object_id)][0]
                 length_route=Family.get_route_length(route)
                 building=int(optimal_scape[int(object_id)][1])
-                meating_point=(building,'BD')
+                if int(optimal_scape[int(object_id)][1])<150:
+                    meating_point=(building,'BD')
+                else:
+                    meating_point=(building,'MP')
             else:
                 route=home_to_mt_load[str(object_id)][0]
                 length_route=Family.get_route_length(route)
                 building=int(home_to_mt_load[str(object_id)][1])
-                meating_point=(building,'BD')
+                meating_point=(building,'MP')
         return(route,meating_point,length_route)
   
 
@@ -129,7 +132,7 @@ class Family(object):
             start_scape=S.generate_startscape_rand(members)
             Family.families.append(Family(env,members,housing,start_scape,velocity,route,meating_point,scenario,length_route,geometry))
         print("fin construir familias ", (time.time())-start)
-        sys.exit()
+
 
     @classmethod
     def reset_class(cls):
@@ -156,7 +159,7 @@ class Family(object):
                 street_find.flow-=1
             if len(self.route)==0: #Final de ruta
                 if self.meating_point[1]=='MP': #Llega a punto de encuentro
-                    print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point  ))
+                    print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point))
                     id_to_search=self.meating_point[0]    
                     meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
                     new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
@@ -193,7 +196,7 @@ class Family(object):
                                 ###########
                                 # Llegan a un punto de encuentro
                                 ###########
-                                print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point)+' EN TIEMPO '+str(self.env.now))
+                                print('esto no deberia pasar FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point)+' EN TIEMPO '+str(self.env.now))
                                 id_to_search=self.meating_point    
                                 meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
                                 new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
@@ -384,8 +387,6 @@ if __name__ == '__main__':
     buildings=gpd.read_file('data/edificios/Edificios_zona_inundacion.shp')
     meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Tsunami/Puntos_Encuentro/Puntos_Encuentro_Antofagasta/puntos_de_encuentro.shp')
     nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
-
-
 
     time_sim=500
     scenarios=[('scenario 3',time_sim)]
