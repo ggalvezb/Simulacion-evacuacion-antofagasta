@@ -88,15 +88,24 @@ class Family(object):
             building=int(home_to_bd_load[str(object_id)][1])
             prob_go_bd=length_route_to_mt/(length_route_to_mt+length_route_to_bd)
             prob_go_mt=length_route_to_bd/(length_route_to_mt+length_route_to_bd)
-            route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
-            if route==route_to_mt:
-                print("A mp")
-                meating_point=(meating_point,'MP')
-                length_route=length_route_to_mt 
-            elif route==route_to_bd:
-                print("A edificio")
+            if prob_go_bd>=0.85:
+                route=route_to_bd
                 meating_point=(building,'BD')
                 length_route=length_route_to_bd
+            elif prob_go_mt>=0.85:
+                route=route_to_mt
+                meating_point=(meating_point,'MP')
+                length_route=length_route_to_mt
+            else: 
+                route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
+                if route==route_to_mt:
+                    print("A mp")
+                    meating_point=(meating_point,'MP')
+                    length_route=length_route_to_mt 
+                elif route==route_to_bd:
+                    print("A edificio")
+                    meating_point=(building,'BD')
+                    length_route=length_route_to_bd
 
         elif scenario=='scenario 3':
             object_id=str(int(list(house_df['OBJECTID'])[0]))
