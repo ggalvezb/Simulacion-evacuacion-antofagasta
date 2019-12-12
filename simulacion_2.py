@@ -89,10 +89,12 @@ class Family(object):
             prob_go_bd=length_route_to_mt/(length_route_to_mt+length_route_to_bd)
             prob_go_mt=length_route_to_bd/(length_route_to_mt+length_route_to_bd)
             route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
-            if route==route_to_mt: 
+            if route==route_to_mt:
+                print("A mp")
                 meating_point=(meating_point,'MP')
                 length_route=length_route_to_mt 
             elif route==route_to_bd:
+                print("A edificio")
                 meating_point=(building,'BD')
                 length_route=length_route_to_bd
 
@@ -122,8 +124,7 @@ class Family(object):
         velocity=((kids*1.3)+(adults*1.5)+(olds*0.948))/total_person
         return(velocity)
 
-    @staticmethod
-    def streets_statistics(id_to_search,velocity):
+    def streets_statistics(self,id_to_search,velocity):
         street_dict={'ID':id_to_search,'Velocity':velocity}
         self.path.append(street_dict)
 
@@ -131,7 +132,7 @@ class Family(object):
     def builder_families(cls,type_road,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
         start=time.time()
-        for element in house_id[:10]:
+        for element in house_id[0:1]:
             members,people_for_stats=Family.get_members(element)
             house_df=people_to_evacuate.loc[people_to_evacuate['House ID']==element]
             housing=list(house_df['ObjectID'])[0]
@@ -146,7 +147,7 @@ class Family(object):
         ################
         # Salen de sus casas
         ################
-        self.delays=start_scape
+        self.delays=self.start_scape
         yield self.env.timeout(self.start_scape)  
 
         while True:
@@ -159,7 +160,11 @@ class Family(object):
                 street_find.flow+=1
                 if street_find.flow>street_find.capacity: street_find.velocity=0.751 
                 velocity=min(street_find.velocity,self.velocity)
-                yield self.env.timeout(velocity*street_find.lenght)
+                # print("Velocidad en m/s: ",velocity)
+                # print("Largo de calle: ",street_find.lenght)
+                # print("Tiempo de viaje en la calle: ",(street_find.lenght/velocity))
+                Family.streets_statistics(self,id_to_search,street_find.lenght/velocity)
+                yield self.env.timeout(street_find.lenght/velocity)
                 street_find.flow-=1
             if len(route_copy)==0: #Final de ruta
                 if self.meating_point[1]=='MP': #Llega a punto de encuentro
@@ -196,7 +201,8 @@ class Family(object):
                             street_find.flow+=1
                             if street_find.flow>street_find.capacity: street_find.velocity=0.751 
                             velocity=min(street_find.velocity,self.velocity)
-                            yield self.env.timeout(velocity*street_find.lenght)
+                            Family.streets_statistics(self,id_to_search,street_find.lenght/velocity)
+                            yield self.env.timeout(street_find.lenght/velocity)
                             street_find.flow-=1
                             if len(route_copy)==0:
                                 ###########
@@ -210,7 +216,6 @@ class Family(object):
                                 meatingpoint_find.persons+=self.members['males']+self.members['women']
                                 break
                     break
-
 
 
 class Street(object):
@@ -397,7 +402,7 @@ if __name__ == '__main__':
     time_sim=500
     scenarios=[('scenario 2',time_sim)]
     # scenarios = [('scenario 1',time),('scenario 2',time)]
-    exp = Experiment(2,scenarios)
+    exp = Experiment(4,scenarios)
     exp.run()
 
 print("TERMINO")
