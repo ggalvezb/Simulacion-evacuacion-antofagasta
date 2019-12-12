@@ -26,7 +26,9 @@ inicio=time.time()
 class Family(object):
     ID=0
     families=[]
-    def __init__(self, members, housing, velocity, route,meating_point,scenario,route_lenght,geometry):
+
+    family_statistics=[]
+    def __init__(self, members, housing, velocity, route,meating_point,scenario,route_lenght,geometry,people_for_stats):
         self.ID=Family.ID
         Family.ID+=1                    
         self.members = members          
@@ -40,14 +42,17 @@ class Family(object):
         self.scenario=scenario
         self.geometry=geometry
 
-        #Create the env for the family
-        
-
+        #Stats
+        self.family_stats={}
+        self.path=[]
+        self.delays=0
+        self.people=people_for_stats
 
     @staticmethod
     def get_members(element):
         age_list=list(synthetic_population.loc[synthetic_population['House ID']==element].Age)
         sex_list=list(synthetic_population.loc[synthetic_population['House ID']==element].Sex)
+        people_for_stats=[{'Age':x,'Sex':y}for (x,y) in zip(age_list,sex_list)]
         adult=len([l for l in age_list if 18<=l<60])
         young=len([l for l in age_list if 12<=l<18])
         kid=len([l for l in age_list if 0<=l<12])
@@ -55,8 +60,8 @@ class Family(object):
         men=len([l for l in sex_list if l==1])
         woman=len([l for l in sex_list if l==2])
         members={'adults':adult,'youngs':young,'kids':kid,'olds':old,'males':men,'women':woman}    
-        return members
-    
+        return members,people_for_stats
+
     @staticmethod
     def get_route_length(route):
         route_length=0
@@ -108,7 +113,6 @@ class Family(object):
                 meating_point=(building,'MP')
         return(route,meating_point,length_route)
   
-
     @staticmethod
     def get_velocity(members):
         kids=members['kids']
@@ -118,26 +122,31 @@ class Family(object):
         velocity=((kids*1.3)+(adults*1.5)+(olds*0.948))/total_person
         return(velocity)
 
+    @staticmethod
+    def streets_statistics(id_to_search,velocity):
+        street_dict={'ID':id_to_search,'Velocity':velocity}
+        self.path.append(street_dict)
+
     @classmethod
     def builder_families(cls,type_road,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
         start=time.time()
-        for element in house_id[:2000]:
-            members=Family.get_members(element)
+        for element in house_id[:10]:
+            members,people_for_stats=Family.get_members(element)
             house_df=people_to_evacuate.loc[people_to_evacuate['House ID']==element]
             housing=list(house_df['ObjectID'])[0]
             geometry=list(house_df['geometry'])[0]
             route,meating_point,length_route=Family.get_route(element,type_road,scenario,house_df)
             velocity=Family.get_velocity(members)
-            Family.families.append(Family(members,housing,velocity,route,meating_point,scenario,length_route,geometry))
+            Family.families.append(Family(members,housing,velocity,route,meating_point,scenario,length_route,geometry,people_for_stats))
         print("fin construir familias ", (time.time())-start)
 
     def evacuate(self):
-        print("PARTE SIMULACION")
         route_copy=self.route.copy()
         ################
         # Salen de sus casas
         ################
+        self.delays=start_scape
         yield self.env.timeout(self.start_scape)  
 
         while True:
@@ -169,6 +178,8 @@ class Family(object):
                     if building_search.state == 'open':
                         building_search.num_family+=1
                         building_search.capacity-=self.members['males']+self.members['women']
+                        new_members=dict(Counter(building_search.members)+Counter(self.members))
+                        building_search.members=new_members
                         if building_search.capacity<=0: building_search.state='close'
                     else:
                         ##########
@@ -199,6 +210,8 @@ class Family(object):
                                 meatingpoint_find.persons+=self.members['males']+self.members['women']
                                 break
                     break
+
+
 
 class Street(object):
     streets=[]
@@ -259,6 +272,8 @@ class Building(object):
         self.num_family=0 
         self.state='open'
         self.geometry=geometry
+        self.members={'adults':0,'youngs':0,'kids':0,'olds':0,'males':0,'women':0}
+
     
     @classmethod
     def builder_building(cls):
@@ -268,7 +283,7 @@ class Building(object):
             height=int(building['Base'].item())
             geometry=building['geometry'].item()
             Building.buildings.append(Building(ID,height,geometry))
-   
+     
 class MeatingPoint(object):
     meating_points=[]
 
@@ -317,7 +332,6 @@ class Model(object):
             family.start_scape=S.generate_startscape_rand(family.members)
             family.env=env
             family.env.process(family.evacuate())
-            print(family.start_scape)
 
         for building in Building.buildings:
             building.capacity=(building.height/3)*5
@@ -343,8 +357,6 @@ class Replicator(object):
         # return [Model(seeds,*params).run() for seeds in self.seeds], params
         return [Model(seeds,*params).run() for seeds in self.seeds]
 
-
-
 class Experiment(object):
     def __init__(self,num_replics,scenarios):
         self.seeds = list(zip(*3*[iter([i for i in range(num_replics*3)])]))
@@ -360,7 +372,6 @@ class Experiment(object):
             Building.buildings=[]
             MeatingPoint.meating_points=[]
             
-
 
 if __name__ == '__main__':
     #Cargo datos
@@ -384,12 +395,9 @@ if __name__ == '__main__':
     nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
 
     time_sim=500
-    # scenarios=[('scenario 3',time_sim)]
-    scenarios = [('scenario 1',time),('scenario 2',time)]
+    scenarios=[('scenario 2',time_sim)]
+    # scenarios = [('scenario 1',time),('scenario 2',time)]
     exp = Experiment(2,scenarios)
     exp.run()
 
-termino=time.time()
-print('TIEMPO TOTAL ',str(inicio-termino))
-
-
+print("TERMINO")

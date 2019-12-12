@@ -11,7 +11,7 @@ from cplex import Cplex
 from cplex.exceptions import CplexError
 import igraph
 import sys
-print("hola")
+
 #Cargo datos
 persons_data = pd.read_csv("data/personas_antofagasta.csv")
 synthetic_population=pd.read_csv('data/synthetic_population.csv')
