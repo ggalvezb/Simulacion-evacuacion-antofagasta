@@ -99,11 +99,9 @@ class Family(object):
             else: 
                 route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
                 if route==route_to_mt:
-                    print("A mp")
                     meating_point=(meating_point,'MP')
                     length_route=length_route_to_mt 
                 elif route==route_to_bd:
-                    print("A edificio")
                     meating_point=(building,'BD')
                     length_route=length_route_to_bd
 
@@ -141,7 +139,7 @@ class Family(object):
     def builder_families(cls,type_road,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
         start=time.time()
-        for element in house_id[0:1]:
+        for element in house_id[0:10]:
             members,people_for_stats=Family.get_members(element)
             house_df=people_to_evacuate.loc[people_to_evacuate['House ID']==element]
             housing=list(house_df['ObjectID'])[0]
