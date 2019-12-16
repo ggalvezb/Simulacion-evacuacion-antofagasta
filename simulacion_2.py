@@ -26,8 +26,8 @@ inicio=time.time()
 class Family(object):
     ID=0
     families=[]
-
     family_statistics=[]
+
     def __init__(self, members, housing, velocity, route,meating_point,scenario,route_lenght,geometry,people_for_stats):
         self.ID=Family.ID
         Family.ID+=1                    
@@ -41,12 +41,22 @@ class Family(object):
         self.meating_point=meating_point
         self.scenario=scenario
         self.geometry=geometry
+        self.prob_go_bd=None
+        self.prob_go_mt=None
+        self.route_to_bd=None 
+        self.route_to_mt=None 
+        self.length_route_to_bd=None 
+        self.length_route_to_mt=None 
+        self.point_mt=None
+        self.point_bd=None
 
         #Stats
         self.family_stats={}
         self.path=[]
         self.delays=0
         self.people=people_for_stats
+        self.evacuation_time=0
+
 
     @staticmethod
     def get_members(element):
@@ -71,8 +81,9 @@ class Family(object):
         return(route_length)    
 
     @staticmethod
-    def get_route(element,type_road,scenario,house_df):
+    def get_route(type_road,scenario,house_df):
         if scenario=='scenario 1':
+            prob_go_bd,prob_go_mt,route_to_mt,route_to_bd,length_route_to_bd,length_route_to_mt,point_mt,point_bd=None,None,None,None,None,None,None,None
             object_id=str(int(list(house_df['OBJECTID'])[0]))
             route=type_road[str(object_id)][0].copy()
             length_route=Family.get_route_length(route)
@@ -82,10 +93,12 @@ class Family(object):
             object_id=str(int(list(house_df['OBJECTID'])[0]))
             route_to_mt=home_to_mt_load[str(object_id)][0]
             length_route_to_mt=Family.get_route_length(route_to_mt)
-            meating_point=int(home_to_mt_load[str(object_id)][1]) 
+            meating_point=int(home_to_mt_load[str(object_id)][1])
+            point_mt=meating_point
             route_to_bd=home_to_bd_load[str(object_id)][0]
             length_route_to_bd=Family.get_route_length(route_to_bd)
             building=int(home_to_bd_load[str(object_id)][1])
+            point_bd=building
             prob_go_bd=length_route_to_mt/(length_route_to_mt+length_route_to_bd)
             prob_go_mt=length_route_to_bd/(length_route_to_mt+length_route_to_bd)
             if prob_go_bd>=0.85:
@@ -106,6 +119,7 @@ class Family(object):
                     length_route=length_route_to_bd
 
         elif scenario=='scenario 3':
+            prob_go_bd,prob_go_mt,route_to_mt,route_to_bd,length_route_to_bd,length_route_to_mt,point_mt,point_bd=None,None,None,None,None,None,None,None
             object_id=str(int(list(house_df['OBJECTID'])[0]))
             if int(object_id) in optimal_scape.keys():
                 route=optimal_scape[int(object_id)][0]
@@ -120,7 +134,7 @@ class Family(object):
                 length_route=Family.get_route_length(route)
                 building=int(home_to_mt_load[str(object_id)][1])
                 meating_point=(building,'MP')
-        return(route,meating_point,length_route)
+        return(route,meating_point,length_route,prob_go_bd,prob_go_mt,route_to_bd,route_to_mt,length_route_to_bd,length_route_to_mt,point_mt,point_bd)
   
     @staticmethod
     def get_velocity(members):
@@ -131,8 +145,9 @@ class Family(object):
         velocity=((kids*1.3)+(adults*1.5)+(olds*0.948))/total_person
         return(velocity)
 
-    def streets_statistics(self,id_to_search,velocity):
+    def streets_statistics(self,id_to_search,velocity,time):
         street_dict={'ID':id_to_search,'Velocity':velocity}
+        self.evacuation_time+=time
         self.path.append(street_dict)
 
     @classmethod
@@ -144,9 +159,19 @@ class Family(object):
             house_df=people_to_evacuate.loc[people_to_evacuate['House ID']==element]
             housing=list(house_df['ObjectID'])[0]
             geometry=list(house_df['geometry'])[0]
-            route,meating_point,length_route=Family.get_route(element,type_road,scenario,house_df)
+            route,meating_point,length_route,prob_go_bd,prob_go_mt,route_to_bd,route_to_mt,length_route_to_bd,length_route_to_mt,point_mt,point_bd=Family.get_route(type_road,scenario,house_df)
             velocity=Family.get_velocity(members)
             Family.families.append(Family(members,housing,velocity,route,meating_point,scenario,length_route,geometry,people_for_stats))
+            if scenario=='scenario 2':
+                Family.families[-1].prob_go_bd=prob_go_bd
+                Family.families[-1].prob_go_mt=prob_go_mt
+                Family.families[-1].route_to_bd=route_to_bd
+                Family.families[-1].route_to_mt=route_to_mt
+                Family.families[-1].length_route_to_bd=length_route_to_bd
+                Family.families[-1].length_route_to_mt=length_route_to_mt
+                Family.families[-1].point_mt=point_mt
+                Family.families[-1].point_bd=point_bd
+
         print("fin construir familias ", (time.time())-start)
 
     def evacuate(self):
@@ -170,7 +195,7 @@ class Family(object):
                 # print("Velocidad en m/s: ",velocity)
                 # print("Largo de calle: ",street_find.lenght)
                 # print("Tiempo de viaje en la calle: ",(street_find.lenght/velocity))
-                Family.streets_statistics(self,id_to_search,street_find.lenght/velocity)
+                Family.streets_statistics(self,id_to_search,velocity,street_find.lenght/velocity)
                 yield self.env.timeout(street_find.lenght/velocity)
                 street_find.flow-=1
             if len(route_copy)==0: #Final de ruta
@@ -208,7 +233,7 @@ class Family(object):
                             street_find.flow+=1
                             if street_find.flow>street_find.capacity: street_find.velocity=0.751 
                             velocity=min(street_find.velocity,self.velocity)
-                            Family.streets_statistics(self,id_to_search,street_find.lenght/velocity)
+                            Family.streets_statistics(self,id_to_search,velocity,street_find.lenght/velocity)
                             yield self.env.timeout(street_find.lenght/velocity)
                             street_find.flow-=1
                             if len(route_copy)==0:
@@ -337,13 +362,38 @@ class Model(object):
         self.simulation_time=simulation_time
         self.scenario=scenario
 
-    def run(self):
+    @staticmethod
+    def get_route(family,prob_go_mt,prob_go_bd,route_to_bd,route_to_mt,length_route_to_bd,length_route_to_mt):
+        print("WENAAAAAAAAAAAA QL")
+        if prob_go_bd>=0.85:
+            family.route=route_to_bd
+            family.meating_point=(family.point_bd,'BD')
+            family.length_route=length_route_to_bd
+        elif prob_go_mt>=0.85:
+            family.route=route_to_mt
+            family.meating_point=(family.point_mt,'MP')
+            family.length_route=length_route_to_mt
+        else: 
+            route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
+            if route==route_to_mt:
+                family.route=route_to_mt
+                family.meating_point=(family.point_mt,'MP')
+                family.length_route=length_route_to_mt 
+            elif route==route_to_bd:
+                family.route=route_to_bd
+                family.meating_point=(family.point_bd,'BD')
+                family.length_route=length_route_to_bd
+
+
+    def run(self,scenario):
         S = Streams(self.startscape_seed)
         env=simpy.Environment()
         for family in Family.families:
-            family.start_scape=S.generate_startscape_rand(family.members)
+            family.start_scape=S.generate_startscape_rand(family.members) #Vario el tiempo inicial de escape
+            if scenario=='scenario 2': Model.get_route(family,family.prob_go_mt,family.prob_go_bd,family.route_to_bd,family.route_to_mt,family.length_route_to_bd,family.length_route_to_mt) #Vario la ruta de escape
             family.env=env
             family.env.process(family.evacuate())
+           
 
         for building in Building.buildings:
             building.capacity=(building.height/3)*5
@@ -367,7 +417,7 @@ class Replicator(object):
         print("LARGO DE FAMILIAS {} DE CALLES {} EDIFICIOS {} Y MP {}".format(len(Family.families),len(Street.streets),len(Building.buildings),len(MeatingPoint.meating_points)))
 
         # return [Model(seeds,*params).run() for seeds in self.seeds], params
-        return [Model(seeds,*params).run() for seeds in self.seeds]
+        return [Model(seeds,*params).run(scenario) for seeds in self.seeds]
 
 class Experiment(object):
     def __init__(self,num_replics,scenarios):
@@ -379,10 +429,10 @@ class Experiment(object):
         # self.results = Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
         for scenario in self.scenarios:
             Replicator(self.seeds).run(scenario)
-            Family.families=[]
-            Street.streets=[]
-            Building.buildings=[]
-            MeatingPoint.meating_points=[]
+            # Family.families=[]
+            # Street.streets=[]
+            # Building.buildings=[]
+            # MeatingPoint.meating_points=[]
             
 
 if __name__ == '__main__':
@@ -413,3 +463,4 @@ if __name__ == '__main__':
     exp.run()
 
 print("TERMINO")
+
