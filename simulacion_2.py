@@ -9,6 +9,7 @@ import simpy
 import sys
 import time   #Para probar los tiempos de ejecucion
 import os
+import json
 
 #Para el modelo de optimizacion
 import cplex
@@ -154,13 +155,18 @@ class Family(object):
         self.path.append(street_dict)
 
     def save_stats(self):
+        self.family_stats['ID']=self.ID
         self.family_stats['Path']=self.path
-        self.family_stats['Delays']=self.delays
+        self.family_stats['Delays']=self.delays.astype(float)
         self.family_stats['Members']=self.members
         self.family_stats['People']=self.people
-        self.family_stats['Start scape time']=self.start_scape_simtime
+        self.family_stats['Start scape time']=self.start_scape_simtime.astype(float)
         self.family_stats['End scape time']=self.end_scape_simtime
         self.family_stats['Evacuation time']=self.evacuation_time
+        # self.family_stats['Geolocation']=self.geometry
+        self.family_stats['Length scape route']=self.route_lenght
+        self.family_stats['Housing']=self.housing
+        self.family_stats['Safe point']=self.meating_point
         Family.family_statistics.append(self.family_stats)
 
     @classmethod
@@ -271,7 +277,6 @@ class Family(object):
                                 break
                     break
 
-
 class Street(object):
     streets=[]
 
@@ -379,6 +384,7 @@ class Streams(object):
         return(self.startscape_rand.choice(stratscape_vals,p=startscape_prob))   
 
 class Model(object):
+    replica=1
     def __init__(self, seeds,scenario,simulation_time):
         self.startscape_seed=seeds
         print("seed 2: ",self.startscape_seed)
@@ -430,8 +436,23 @@ class Model(object):
 
         env.run()
         #Aca se acaba la replica, entonces de aqui debo rescatar las estadisticas de la corrida
+        json_family=json.dumps(Family.family_statistics)
+        with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" Family.geojson",'w') as f:
+            f.write(json_family)
         
+        MP_statistics=[{'ID':element.ID.astype(str),'Members':element.members,'Persons':element.persons} for element in MeatingPoint.meating_points]
+        json_MP=json.dumps(MP_statistics)
+        with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" MP.txt",'w') as f:
+            f.write(json_MP)
         
+        BD_statistics=[{'ID':element.ID,'Members':element.members,'Num_families':element.num_family,'Final state':element.state} for element in Building.buildings]
+        # BD_statistics=[{'ID':element.ID,'Members':element.members,'Num_families':element.num_family,'Geolocation':element.geometry,'Final state':element.state} for element in Building.buildings]
+        json_BD=json.dumps(BD_statistics)
+        with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" BD.txt",'w') as f:
+            f.write(json_BD)
+
+        Model.replica+=1
+
 
 
 class Replicator(object):
@@ -467,6 +488,7 @@ class Experiment(object):
             # Street.streets=[]
             # Building.buildings=[]
             # MeatingPoint.meating_points=[]
+            #Model.replica=1
             
 
 if __name__ == '__main__':
@@ -497,4 +519,19 @@ if __name__ == '__main__':
     exp.run()
 
 print("TERMINO")
+
+sys.exit()
+#Tester
+
+s=json.dumps(Family.family_statistics)
+with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\replica_"+str(1)+".txt",'w') as f:
+    f.write(s)
+
+print(Family.family_statistics[0])
+print(MeatingPoint.meating_points[0].members)
+print(Building.buildings[0].members)
+print(Street.streets[0].max_flow)
+
+
+
 
