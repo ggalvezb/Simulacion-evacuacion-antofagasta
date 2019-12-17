@@ -56,7 +56,10 @@ class Family(object):
         self.delays=0
         self.people=people_for_stats
         self.evacuation_time=0
-
+        self.start_scape_simtime=0
+        self.end_scape_simtime=0
+        self.end_point=None
+        self.dem_info=None
 
     @staticmethod
     def get_members(element):
@@ -150,6 +153,16 @@ class Family(object):
         self.evacuation_time+=time
         self.path.append(street_dict)
 
+    def save_stats(self):
+        self.family_stats['Path']=self.path
+        self.family_stats['Delays']=self.delays
+        self.family_stats['Members']=self.members
+        self.family_stats['People']=self.people
+        self.family_stats['Start scape time']=self.start_scape_simtime
+        self.family_stats['End scape time']=self.end_scape_simtime
+        self.family_stats['Evacuation time']=self.evacuation_time
+        Family.family_statistics.append(self.family_stats)
+
     @classmethod
     def builder_families(cls,type_road,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
@@ -180,6 +193,7 @@ class Family(object):
         # Salen de sus casas
         ################
         self.delays=self.start_scape
+        self.start_scape_simtime=self.start_scape
         yield self.env.timeout(self.start_scape)  
 
         while True:
@@ -190,6 +204,7 @@ class Family(object):
                 id_to_search=route_copy.pop(0)
                 street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
                 street_find.flow+=1
+                if street_find.max_flow<street_find.flow: street_find.max_flow=street_find.flow #Actualizo el maimo flujo por calle
                 if street_find.flow>street_find.capacity: street_find.velocity=0.751 
                 velocity=min(street_find.velocity,self.velocity)
                 # print("Velocidad en m/s: ",velocity)
@@ -206,6 +221,8 @@ class Family(object):
                     new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
                     meatingpoint_find.members=new_members
                     meatingpoint_find.persons+=self.members['males']+self.members['women']
+                    self.end_scape_simtime=self.env.now #Guardo tiempo en que arriba a punto seguro
+                    Family.save_stats(self)#Guardo estadisticas
                     break
 
                 elif self.meating_point[1]=='BD': #Llega a edificio
@@ -217,6 +234,8 @@ class Family(object):
                         building_search.capacity-=self.members['males']+self.members['women']
                         new_members=dict(Counter(building_search.members)+Counter(self.members))
                         building_search.members=new_members
+                        self.end_scape_simtime=self.env.now #Guardo tiempo en que arriba a punto seguro
+                        Family.save_stats(self)#Guardo estadisticas
                         if building_search.capacity<=0: building_search.state='close'
                     else:
                         ##########
@@ -231,6 +250,7 @@ class Family(object):
                             id_to_search=route_copy.pop(0)
                             street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
                             street_find.flow+=1
+                            if street_find.max_flow<street_find.flow: street_find.max_flow=street_find.flow #Actualizo el maimo flujo por calle
                             if street_find.flow>street_find.capacity: street_find.velocity=0.751 
                             velocity=min(street_find.velocity,self.velocity)
                             Family.streets_statistics(self,id_to_search,velocity,street_find.lenght/velocity)
@@ -246,6 +266,8 @@ class Family(object):
                                 new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
                                 meatingpoint_find.members=new_members
                                 meatingpoint_find.persons+=self.members['males']+self.members['women']
+                                self.end_scape_simtime=self.env.now #Guardo tiempo en que arriba a punto seguro
+                                Family.save_stats(self)#Guardo estadisticas
                                 break
                     break
 
@@ -261,6 +283,7 @@ class Street(object):
         self.type=type_street
         self.lenght=lenght
         self.capacity=int(capacity)  #Si se supera este valor se considera atochado y la calle baja su velocidad a 0.751 m/s
+        self.max_flow=0
 
     @staticmethod
     def get_capacity(type_street,lenght):
@@ -364,7 +387,6 @@ class Model(object):
 
     @staticmethod
     def get_route(family,prob_go_mt,prob_go_bd,route_to_bd,route_to_mt,length_route_to_bd,length_route_to_mt):
-        print("WENAAAAAAAAAAAA QL")
         if prob_go_bd>=0.85:
             family.route=route_to_bd
             family.meating_point=(family.point_bd,'BD')
@@ -386,9 +408,12 @@ class Model(object):
 
 
     def run(self,scenario):
+
+        Family.family_statistics=[]
         S = Streams(self.startscape_seed)
         env=simpy.Environment()
         for family in Family.families:
+            family.evacuation_time=0
             family.start_scape=S.generate_startscape_rand(family.members) #Vario el tiempo inicial de escape
             if scenario=='scenario 2': Model.get_route(family,family.prob_go_mt,family.prob_go_bd,family.route_to_bd,family.route_to_mt,family.length_route_to_bd,family.length_route_to_mt) #Vario la ruta de escape
             family.env=env
@@ -398,7 +423,16 @@ class Model(object):
         for building in Building.buildings:
             building.capacity=(building.height/3)*5
             building.num_family=0 
+        
+        for mp in MeatingPoint.meating_points:
+            mp.members={'adults':0,'youngs':0,'kids':0,'olds':0,'males':0,'women':0}
+            mp.persons=0
+
         env.run()
+        #Aca se acaba la replica, entonces de aqui debo rescatar las estadisticas de la corrida
+        
+        
+
 
 class Replicator(object):
     def __init__(self, seeds):
@@ -457,9 +491,9 @@ if __name__ == '__main__':
     nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
 
     time_sim=500
-    scenarios=[('scenario 2',time_sim)]
+    scenarios=[('scenario 1',time_sim)]
     # scenarios = [('scenario 1',time),('scenario 2',time)]
-    exp = Experiment(4,scenarios)
+    exp = Experiment(2,scenarios)
     exp.run()
 
 print("TERMINO")
