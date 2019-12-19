@@ -334,7 +334,7 @@ class Street(object):
             Street.streets.append(Street(ID,height,type_street,lenght,capacity,velocity))
             contador+=1
             if contador==control:
-                print("Faltan "+str(len(street_id)-contador)+' para que empieze la simulacion')
+                print("Faltan "+str(len(street_id)-contador)+' para que empiece la simulacion')
                 control+=1000
 
 class Building(object):
@@ -447,16 +447,18 @@ class Model(object):
         env.run()
         #Aca se acaba la replica, entonces de aqui debo rescatar las estadisticas de la corrida
         Family.family_statistics_dataframe.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" Family.csv")
+        Family.family_statistics_dataframe=pd.DataFrame(columns=['ID','Path','Delays','Members','People','Start scape time','End scape time','Evacuation time','x','y','Length scape route','Housing','Safe point'])
 
         MP_statistics_dataframe=pd.DataFrame(columns=['ID','Members','Persons'])
         for element in MeatingPoint.meating_points:
-            MP_statistics_dataframe.append({'ID':element.ID.astype(str),'Members':element.members,'Persons':element.persons},ignore_index=True)
+            MP_statistics_dataframe=MP_statistics_dataframe.append({'ID':element.ID.astype(str),'Members':element.members,'Persons':element.persons},ignore_index=True)
         MP_statistics_dataframe.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" MP.csv")
 
-        BD_statistics_dataframe=pd.DataFrame(columns=['ID','Members','Persons'])
-        for element in MeatingPoint.meating_points:
-            MP_statistics_dataframe.append({'ID':element.ID.astype(str),'Members':element.members,'Persons':element.persons},ignore_index=True)
+        BD_statistics_dataframe=pd.DataFrame(columns=['ID','Members','Num Family'])
+        for element in Building.buildings:
+            BD_statistics_dataframe=BD_statistics_dataframe.append({'ID':element.ID,'Members':element.members,'Num Family':element.num_family},ignore_index=True)
         BD_statistics_dataframe.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" BD.csv")
+        
         # json_family=json.dumps(Family.family_statistics)
         # with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" Family.txt",'w') as f:
         #     f.write(json_family)
@@ -490,7 +492,7 @@ class Replicator(object):
         Family.builder_families(route_scenario,scenario)
         print("LARGO DE FAMILIAS {} DE CALLES {} EDIFICIOS {} Y MP {}".format(len(Family.families),len(Street.streets),len(Building.buildings),len(MeatingPoint.meating_points)))
 
-        # return [Model(seeds,*params).run() for seeds in self.seeds], params
+        # return [Model(seeds,*params).run(scenario) for seeds in self.seeds], params
         return [Model(seeds,*params).run(scenario) for seeds in self.seeds]
 
 class Experiment(object):
@@ -500,9 +502,11 @@ class Experiment(object):
     
     def run(self):
         cpu = mp.cpu_count()
-        # self.results = Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
-        for scenario in self.scenarios:
-            Replicator(self.seeds).run(scenario)
+        Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
+        # for scenario in self.scenarios:
+            # Replicator(self.seeds).run(scenario)
+            # Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run(scenario)))
+            # Family.ID=0
             # Family.families=[]
             # Street.streets=[]
             # Building.buildings=[]
@@ -532,9 +536,10 @@ if __name__ == '__main__':
     nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
 
     time_sim=500
-    scenarios=[('scenario 1',time_sim)]
-    # scenarios = [('scenario 1',time),('scenario 2',time)]
-    exp = Experiment(1,scenarios)
+    # scenarios=[('scenario 3',time_sim)]
+    scenarios = [('scenario 1',time),('scenario 2',time)]
+    # scenarios = [('scenario 1',time),('scenario 2',time),('scenario 3',time_sim)]
+    exp = Experiment(5,scenarios)
     exp.run()
 
 
@@ -548,32 +553,4 @@ sys.exit()
 
 
 #Tester
-def df_to_geojson(df, properties, lat='latitude', lon='longitude'):
-    geojson = {'type':'FeatureCollection', 'features':[]}
-    for _, row in df.iterrows():
-        feature = {'type':'Feature',
-                   'properties':{},
-                   'geometry':{'type':'Point',
-                               'coordinates':[]}}
-        feature['geometry']['coordinates'] = [row[lon],row[lat]]
-        for prop in properties:
-            feature['properties'][prop] = row[prop]
-        geojson['features'].append(feature)
-    return geojson
-
-gdf = gpd.GeoDataFrame(Family.family_statistics_dataframe, geometry='Geolocation')
-gdf_2=gdf[['ID','Path','Geolocation']]
-gdf_2.to_file("countries.shp")
-gdf_2.to_file("output.json", driver="GeoJSON")
-gdf_2.to_file("package.gpkg", layer='countries', driver="GPKG")
-
-for columns in gdf.columns:
-    print(columns)
-
-
-
-gdf_2.to_file("output.json", driver="GeoJSON")
-
-data=pd.read_csv('C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\scenario 1 replica 1 Family.txt')\
-
 
