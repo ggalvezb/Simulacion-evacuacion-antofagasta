@@ -23,11 +23,17 @@ import multiprocessing as mp
 #Para crear grafos y obtener camino minimo
 import igraph
 
+#Para geodataframe
+from shapely.geometry import Point, Polygon
+import fiona
+
 inicio=time.time()
 class Family(object):
     ID=0
     families=[]
     family_statistics=[]
+    family_statistics_dataframe=pd.DataFrame(columns=['ID','Path','Delays','Members','People','Start scape time','End scape time','Evacuation time','x','y','Length scape route','Housing','Safe point'])
+
 
     def __init__(self, members, housing, velocity, route,meating_point,scenario,route_lenght,geometry,people_for_stats):
         self.ID=Family.ID
@@ -61,6 +67,7 @@ class Family(object):
         self.end_scape_simtime=0
         self.end_point=None
         self.dem_info=None
+
 
     @staticmethod
     def get_members(element):
@@ -150,30 +157,33 @@ class Family(object):
         return(velocity)
 
     def streets_statistics(self,id_to_search,velocity,time):
-        street_dict={'ID':id_to_search,'Velocity':velocity}
+        # street_dict={'ID':id_to_search,'Velocity':velocity}
+        street_dict=id_to_search
         self.evacuation_time+=time
         self.path.append(street_dict)
 
     def save_stats(self):
         self.family_stats['ID']=self.ID
         self.family_stats['Path']=self.path
-        self.family_stats['Delays']=self.delays.astype(float)
+        self.family_stats['Delays']=self.delays.astype(float).item()
         self.family_stats['Members']=self.members
         self.family_stats['People']=self.people
-        self.family_stats['Start scape time']=self.start_scape_simtime.astype(float)
-        self.family_stats['End scape time']=self.end_scape_simtime
-        self.family_stats['Evacuation time']=self.evacuation_time
-        # self.family_stats['Geolocation']=self.geometry
-        self.family_stats['Length scape route']=self.route_lenght
+        self.family_stats['Start scape time']=self.start_scape_simtime.astype(float).item()
+        self.family_stats['End scape time']=self.end_scape_simtime.item()
+        self.family_stats['Evacuation time']=self.evacuation_time.item()
+        self.family_stats['x']=self.geometry.x
+        self.family_stats['y']=self.geometry.y
+        self.family_stats['Length scape route']=self.route_lenght.item()
         self.family_stats['Housing']=self.housing
         self.family_stats['Safe point']=self.meating_point
+        Family.family_statistics_dataframe=Family.family_statistics_dataframe.append({'ID':self.ID,'Path':self.path,'Delays':self.delays.astype(float),'Members':self.members,'People':self.people,'Start scape time':self.start_scape_simtime.astype(float),'End scape time':self.end_scape_simtime,'Evacuation time':self.evacuation_time,'x':self.geometry.x,'y':self.geometry.y,'Length scape route':self.route_lenght,'Housing':self.housing,'Safe point':self.meating_point},ignore_index=True)
         Family.family_statistics.append(self.family_stats)
 
     @classmethod
     def builder_families(cls,type_road,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
         start=time.time()
-        for element in house_id[0:10]:
+        for element in house_id[:10]:
             members,people_for_stats=Family.get_members(element)
             house_df=people_to_evacuate.loc[people_to_evacuate['House ID']==element]
             housing=list(house_df['ObjectID'])[0]
@@ -436,24 +446,33 @@ class Model(object):
 
         env.run()
         #Aca se acaba la replica, entonces de aqui debo rescatar las estadisticas de la corrida
-        json_family=json.dumps(Family.family_statistics)
-        with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" Family.geojson",'w') as f:
-            f.write(json_family)
+        Family.family_statistics_dataframe.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" Family.csv")
+
+        MP_statistics_dataframe=pd.DataFrame(columns=['ID','Members','Persons'])
+        for element in MeatingPoint.meating_points:
+            MP_statistics_dataframe.append({'ID':element.ID.astype(str),'Members':element.members,'Persons':element.persons},ignore_index=True)
+        MP_statistics_dataframe.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" MP.csv")
+
+        BD_statistics_dataframe=pd.DataFrame(columns=['ID','Members','Persons'])
+        for element in MeatingPoint.meating_points:
+            MP_statistics_dataframe.append({'ID':element.ID.astype(str),'Members':element.members,'Persons':element.persons},ignore_index=True)
+        BD_statistics_dataframe.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" BD.csv")
+        # json_family=json.dumps(Family.family_statistics)
+        # with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" Family.txt",'w') as f:
+        #     f.write(json_family)
         
-        MP_statistics=[{'ID':element.ID.astype(str),'Members':element.members,'Persons':element.persons} for element in MeatingPoint.meating_points]
-        json_MP=json.dumps(MP_statistics)
-        with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" MP.txt",'w') as f:
-            f.write(json_MP)
+        # MP_statistics=[{'ID':element.ID.astype(str),'Members':element.members,'Persons':element.persons} for element in MeatingPoint.meating_points]
+        # json_MP=json.dumps(MP_statistics)
+        # with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" MP.txt",'w') as f:
+        #     f.write(json_MP)
         
-        BD_statistics=[{'ID':element.ID,'Members':element.members,'Num_families':element.num_family,'Final state':element.state} for element in Building.buildings]
-        # BD_statistics=[{'ID':element.ID,'Members':element.members,'Num_families':element.num_family,'Geolocation':element.geometry,'Final state':element.state} for element in Building.buildings]
-        json_BD=json.dumps(BD_statistics)
-        with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" BD.txt",'w') as f:
-            f.write(json_BD)
+        # BD_statistics=[{'ID':element.ID,'Members':element.members,'Num_families':element.num_family,'Final state':element.state} for element in Building.buildings]
+        # # BD_statistics=[{'ID':element.ID,'Members':element.members,'Num_families':element.num_family,'Geolocation':element.geometry,'Final state':element.state} for element in Building.buildings]
+        # json_BD=json.dumps(BD_statistics)
+        # with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" BD.txt",'w') as f:
+        #     f.write(json_BD)
 
         Model.replica+=1
-
-
 
 class Replicator(object):
     def __init__(self, seeds):
@@ -488,9 +507,9 @@ class Experiment(object):
             # Street.streets=[]
             # Building.buildings=[]
             # MeatingPoint.meating_points=[]
-            #Model.replica=1
+            # Model.replica=1
             
-
+Family.family_statistics_dataframe
 if __name__ == '__main__':
     #Cargo datos
     directory=os.getcwd()
@@ -515,23 +534,46 @@ if __name__ == '__main__':
     time_sim=500
     scenarios=[('scenario 1',time_sim)]
     # scenarios = [('scenario 1',time),('scenario 2',time)]
-    exp = Experiment(2,scenarios)
+    exp = Experiment(1,scenarios)
     exp.run()
 
-print("TERMINO")
 
+
+final=time.time()
+total=final-inicio
+print("TERMINO CON TIEMPO ",str(total))
 sys.exit()
+
+
+
+
 #Tester
+def df_to_geojson(df, properties, lat='latitude', lon='longitude'):
+    geojson = {'type':'FeatureCollection', 'features':[]}
+    for _, row in df.iterrows():
+        feature = {'type':'Feature',
+                   'properties':{},
+                   'geometry':{'type':'Point',
+                               'coordinates':[]}}
+        feature['geometry']['coordinates'] = [row[lon],row[lat]]
+        for prop in properties:
+            feature['properties'][prop] = row[prop]
+        geojson['features'].append(feature)
+    return geojson
 
-s=json.dumps(Family.family_statistics)
-with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\replica_"+str(1)+".txt",'w') as f:
-    f.write(s)
+gdf = gpd.GeoDataFrame(Family.family_statistics_dataframe, geometry='Geolocation')
+gdf_2=gdf[['ID','Path','Geolocation']]
+gdf_2.to_file("countries.shp")
+gdf_2.to_file("output.json", driver="GeoJSON")
+gdf_2.to_file("package.gpkg", layer='countries', driver="GPKG")
 
-print(Family.family_statistics[0])
-print(MeatingPoint.meating_points[0].members)
-print(Building.buildings[0].members)
-print(Street.streets[0].max_flow)
+for columns in gdf.columns:
+    print(columns)
 
 
+
+gdf_2.to_file("output.json", driver="GeoJSON")
+
+data=pd.read_csv('C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\scenario 1 replica 1 Family.txt')\
 
 
