@@ -120,8 +120,11 @@ class Family(object):
                 route=route_to_mt
                 meating_point=(meating_point,'MP')
                 length_route=length_route_to_mt
-            else: 
-                route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
+            else:
+                route=np.random.choice(2,p=[prob_go_mt,prob_go_bd])
+                if route==0: route=route_to_mt
+                else: route=route_to_bd
+                # route=np.random.choice(route_to_mt,route_to_bd,p=[prob_go_mt,prob_go_bd])
                 if route==route_to_mt:
                     meating_point=(meating_point,'MP')
                     length_route=length_route_to_mt 
@@ -165,15 +168,15 @@ class Family(object):
     def save_stats(self):
         self.family_stats['ID']=self.ID
         self.family_stats['Path']=self.path
-        self.family_stats['Delays']=self.delays.astype(float).item()
+        self.family_stats['Delays']=self.delays
         self.family_stats['Members']=self.members
         self.family_stats['People']=self.people
-        self.family_stats['Start scape time']=self.start_scape_simtime.astype(float).item()
-        self.family_stats['End scape time']=self.end_scape_simtime.item()
-        self.family_stats['Evacuation time']=self.evacuation_time.item()
+        self.family_stats['Start scape time']=self.start_scape_simtime*60
+        self.family_stats['End scape time']=self.end_scape_simtime
+        self.family_stats['Evacuation time']=self.evacuation_time
         self.family_stats['x']=self.geometry.x
         self.family_stats['y']=self.geometry.y
-        self.family_stats['Length scape route']=self.route_lenght.item()
+        self.family_stats['Length scape route']=self.route_lenght
         self.family_stats['Housing']=self.housing
         self.family_stats['Safe point']=self.meating_point
         Family.family_statistics_dataframe=Family.family_statistics_dataframe.append({'ID':self.ID,'Path':self.path,'Delays':self.delays.astype(float),'Members':self.members,'People':self.people,'Start scape time':self.start_scape_simtime.astype(float),'End scape time':self.end_scape_simtime,'Evacuation time':self.evacuation_time,'x':self.geometry.x,'y':self.geometry.y,'Length scape route':self.route_lenght,'Housing':self.housing,'Safe point':self.meating_point},ignore_index=True)
@@ -183,7 +186,7 @@ class Family(object):
     def builder_families(cls,type_road,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
         start=time.time()
-        for element in house_id[:10]:
+        for element in house_id[:5]:
             members,people_for_stats=Family.get_members(element)
             house_df=people_to_evacuate.loc[people_to_evacuate['House ID']==element]
             housing=list(house_df['ObjectID'])[0]
@@ -210,13 +213,14 @@ class Family(object):
         ################
         self.delays=self.start_scape
         self.start_scape_simtime=self.start_scape
-        yield self.env.timeout(self.start_scape)  
+        yield self.env.timeout(self.start_scape*60)  
 
         while True:
             ################
             # Inician una calle
             ################
             if len(route_copy)!=0:
+                sys.exit()
                 id_to_search=route_copy.pop(0)
                 street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
                 street_find.flow+=1
@@ -257,8 +261,14 @@ class Family(object):
                         ##########
                         # Si el edificio esta cerrado se van a un punto de encuentro
                         ##########
-                        route_copy=bd_to_mt_load[str(self.housing)][0]
-                        self.meating_point=bd_to_mt_load[str(self.housing)][1]
+                        try:
+                            route_copy=bd_to_mt_load[str(self.housing)][0].copy()
+                            self.meating_point=bd_to_mt_load[str(self.housing)][1]
+                        except:
+                            print("Error en familia {} con cada {}".format(self.ID,self.housing))
+                            sys.exit()
+
+            
                         while True:
                             ##########
                             # Vuelven a calle
@@ -276,7 +286,7 @@ class Family(object):
                                 ###########
                                 # Llegan a un punto de encuentro
                                 ###########
-                                print('esto no deberia pasar FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point)+' EN TIEMPO '+str(self.env.now))
+                                print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point)+' EN TIEMPO '+str(self.env.now))
                                 id_to_search=self.meating_point    
                                 meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
                                 new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
@@ -286,6 +296,9 @@ class Family(object):
                                 Family.save_stats(self)#Guardo estadisticas
                                 break
                     break
+
+
+
 
 class Street(object):
     streets=[]
@@ -412,7 +425,10 @@ class Model(object):
             family.meating_point=(family.point_mt,'MP')
             family.length_route=length_route_to_mt
         else: 
-            route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
+            route=np.random.choice(2,p=[prob_go_mt,prob_go_bd])
+            if route==0: route=route_to_mt
+            else: route=route_to_bd
+            # route=np.random.choice([route_to_mt,route_to_bd],p=[prob_go_mt,prob_go_bd])
             if route==route_to_mt:
                 family.route=route_to_mt
                 family.meating_point=(family.point_mt,'MP')
@@ -502,9 +518,9 @@ class Experiment(object):
     
     def run(self):
         cpu = mp.cpu_count()
-        Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
-        # for scenario in self.scenarios:
-            # Replicator(self.seeds).run(scenario)
+        # Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run)(scenario) for scenario in self.scenarios)
+        for scenario in self.scenarios:
+            Replicator(self.seeds).run(scenario)
             # Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run(scenario)))
             # Family.ID=0
             # Family.families=[]
@@ -536,10 +552,10 @@ if __name__ == '__main__':
     nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
 
     time_sim=500
-    # scenarios=[('scenario 3',time_sim)]
-    scenarios = [('scenario 1',time),('scenario 2',time)]
+    scenarios=[('scenario 2',time_sim)]
+    # scenarios = [('scenario 2',time),('scenario 3',time)]
     # scenarios = [('scenario 1',time),('scenario 2',time),('scenario 3',time_sim)]
-    exp = Experiment(5,scenarios)
+    exp = Experiment(30,scenarios)
     exp.run()
 
 
@@ -553,4 +569,3 @@ sys.exit()
 
 
 #Tester
-
