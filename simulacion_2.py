@@ -186,7 +186,7 @@ class Family(object):
     def builder_families(cls,type_road,scenario):
         house_id=list(OrderedDict.fromkeys(people_to_evacuate['House ID'])) #list of house_id
         start=time.time()
-        for element in house_id[:5]:
+        for element in house_id:
             members,people_for_stats=Family.get_members(element)
             house_df=people_to_evacuate.loc[people_to_evacuate['House ID']==element]
             housing=list(house_df['ObjectID'])[0]
@@ -206,6 +206,8 @@ class Family(object):
 
         print("fin construir familias ", (time.time())-start)
 
+
+
     def evacuate(self):
         route_copy=self.route.copy()
         ################
@@ -214,13 +216,11 @@ class Family(object):
         self.delays=self.start_scape
         self.start_scape_simtime=self.start_scape
         yield self.env.timeout(self.start_scape*60)  
-
         while True:
             ################
             # Inician una calle
             ################
             if len(route_copy)!=0:
-                sys.exit()
                 id_to_search=route_copy.pop(0)
                 street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
                 street_find.flow+=1
@@ -234,18 +234,22 @@ class Family(object):
                 yield self.env.timeout(street_find.lenght/velocity)
                 street_find.flow-=1
             if len(route_copy)==0: #Final de ruta
-                if self.meating_point[1]=='MP': #Llega a punto de encuentro
-                    print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point)+'EN TIEMPO '+str(self.env.now))
-                    id_to_search=self.meating_point[0]    
-                    meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
-                    new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
-                    meatingpoint_find.members=new_members
-                    meatingpoint_find.persons+=self.members['males']+self.members['women']
-                    self.end_scape_simtime=self.env.now #Guardo tiempo en que arriba a punto seguro
-                    Family.save_stats(self)#Guardo estadisticas
-                    break
+                try:
+                    if self.meating_point[1]=='MP': #Llega a punto de encuentro
+                        print('FAMILIA  '+str(self.ID)+' TERMINA EVACUACIÓN Y LLEGAN A PUNTO DE ENCUENTRO '+str(self.meating_point)+'EN TIEMPO '+str(self.env.now))
+                        id_to_search=self.meating_point[0]    
+                        meatingpoint_find = next(filter(lambda x: x.ID == id_to_search, MeatingPoint.meating_points))
+                        new_members=dict(Counter(meatingpoint_find.members)+Counter(self.members))
+                        meatingpoint_find.members=new_members
+                        meatingpoint_find.persons+=self.members['males']+self.members['women']
+                        self.end_scape_simtime=self.env.now #Guardo tiempo en que arriba a punto seguro
+                        Family.save_stats(self)#Guardo estadisticas
+                        break
+                except:
+                    print("Error en familia {} con punto de encuentro {}".format(self.ID,self.meating_point))
+                    sys.exit()
 
-                elif self.meating_point[1]=='BD': #Llega a edificio
+                if self.meating_point[1]=='BD': #Llega a edificio
                     id_to_search=self.meating_point[0]
                     building_search=next(filter(lambda x: x.ID == id_to_search, Building.buildings))
                     print('FAMILIA '+str(self.ID)+' LLEGAN A EDIFICO '+str(building_search.ID)+' Y ESTE SE ENCUENTRA '+str(building_search.state)+' EN TIEMPO '+str(self.env.now))
@@ -264,6 +268,8 @@ class Family(object):
                         try:
                             route_copy=bd_to_mt_load[str(self.housing)][0].copy()
                             self.meating_point=bd_to_mt_load[str(self.housing)][1]
+                            print("ESTA EN EDIFICIO QUE NO DEBERIA ESTAR")
+                            sys.exit()
                         except:
                             print("Error en familia {} con cada {}".format(self.ID,self.housing))
                             sys.exit()
@@ -450,7 +456,6 @@ class Model(object):
             if scenario=='scenario 2': Model.get_route(family,family.prob_go_mt,family.prob_go_bd,family.route_to_bd,family.route_to_mt,family.length_route_to_bd,family.length_route_to_mt) #Vario la ruta de escape
             family.env=env
             family.env.process(family.evacuate())
-           
 
         for building in Building.buildings:
             building.capacity=(building.height/3)*5
@@ -552,7 +557,7 @@ if __name__ == '__main__':
     nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
 
     time_sim=500
-    scenarios=[('scenario 2',time_sim)]
+    scenarios=[('scenario 3',time_sim)]
     # scenarios = [('scenario 2',time),('scenario 3',time)]
     # scenarios = [('scenario 1',time),('scenario 2',time),('scenario 3',time_sim)]
     exp = Experiment(30,scenarios)
@@ -569,3 +574,14 @@ sys.exit()
 
 
 #Tester
+family = next(filter(lambda x: x.ID == 8011, Family.families))
+family.meating_point
+
+
+for element in Family.families:
+    try:
+        if element.meating_point[1] != 'MP' and element.meating_point[1] != 'BD':
+            pass
+    except:
+        print('Familia {} con punto {}'.format(element.ID,element.meating_point))
+
