@@ -266,10 +266,13 @@ class Family(object):
                         # Si el edificio esta cerrado se van a un punto de encuentro
                         ##########
                         try:
-                            route_copy=bd_to_mt_load[str(self.housing)][0].copy()
-                            self.meating_point=bd_to_mt_load[str(self.housing)][1]
-                            print("ESTA EN EDIFICIO QUE NO DEBERIA ESTAR")
-                            sys.exit()
+                            if self.scenario=='scenario 2':
+                                route_copy=bd_to_mt_load[str(self.housing)][0].copy()
+                                self.meating_point=bd_to_mt_load[str(self.housing)][1]
+                            elif self.scenario=='scenario 3':
+                                route_copy=bd_to_mt_load[str(self.housing)][0].copy()
+                                print("ESTA EN EDIFICIO QUE NO DEBERIA ESTAR")
+                                sys.exit()
                         except:
                             print("Error en familia {} con cada {}".format(self.ID,self.housing))
                             sys.exit()
@@ -460,6 +463,7 @@ class Model(object):
         for building in Building.buildings:
             building.capacity=(building.height/3)*5
             building.num_family=0 
+            building.state='open'
         
         for mp in MeatingPoint.meating_points:
             mp.members={'adults':0,'youngs':0,'kids':0,'olds':0,'males':0,'women':0}
@@ -557,7 +561,7 @@ if __name__ == '__main__':
     nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
 
     time_sim=500
-    scenarios=[('scenario 3',time_sim)]
+    scenarios=[('scenario 2',time_sim)]
     # scenarios = [('scenario 2',time),('scenario 3',time)]
     # scenarios = [('scenario 1',time),('scenario 2',time),('scenario 3',time_sim)]
     exp = Experiment(30,scenarios)
