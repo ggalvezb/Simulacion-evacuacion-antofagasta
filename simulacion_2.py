@@ -3,7 +3,6 @@ import pandas as pd
 from collections import OrderedDict
 from collections import Counter
 import numpy as np
-import geopandas as gpd
 from numpy.random import RandomState
 import simpy
 import sys
@@ -24,7 +23,8 @@ import multiprocessing as mp
 import igraph
 
 #Para geodataframe
-from shapely.geometry import Point, Polygon
+import geopandas as gpd
+from shapely.geometry import Point
 import fiona
 
 inicio=time.time()
@@ -60,6 +60,8 @@ class Family(object):
         #Stats
         self.family_stats={}
         self.path=[]
+        self.path_time=[]
+        self.path_velocity=[]
         self.delays=0
         self.people=people_for_stats
         self.evacuation_time=0
@@ -67,7 +69,7 @@ class Family(object):
         self.end_scape_simtime=0
         self.end_point=None
         self.dem_info=None
-
+        
 
     @staticmethod
     def get_members(element):
@@ -164,10 +166,14 @@ class Family(object):
         street_dict=id_to_search
         self.evacuation_time+=time
         self.path.append(street_dict)
+        self.path_time.append(time)
+        self.path_velocity.append(velocity)
 
     def save_stats(self):
         self.family_stats['ID']=self.ID
         self.family_stats['Path']=self.path
+        self.family_stats['Path Time']=self.path_time
+        self.family_stats['Path Velocity']=self.path_velocity
         self.family_stats['Delays']=self.delays
         self.family_stats['Members']=self.members
         self.family_stats['People']=self.people
@@ -179,7 +185,7 @@ class Family(object):
         self.family_stats['Length scape route']=self.route_lenght
         self.family_stats['Housing']=self.housing
         self.family_stats['Safe point']=self.meating_point
-        Family.family_statistics_dataframe=Family.family_statistics_dataframe.append({'ID':self.ID,'Path':self.path,'Delays':self.delays.astype(float),'Members':self.members,'People':self.people,'Start scape time':self.start_scape_simtime.astype(float),'End scape time':self.end_scape_simtime,'Evacuation time':self.evacuation_time,'x':self.geometry.x,'y':self.geometry.y,'Length scape route':self.route_lenght,'Housing':self.housing,'Safe point':self.meating_point},ignore_index=True)
+        Family.family_statistics_dataframe=Family.family_statistics_dataframe.append({'ID':self.ID,'Path':self.path,'Path Time':self.path_time,'Path Velocity':self.path_velocity,'Delays':self.delays.astype(float),'Members':self.members,'People':self.people,'Start scape time':self.start_scape_simtime.astype(float),'End scape time':self.end_scape_simtime,'Evacuation time':self.evacuation_time,'x':self.geometry.x,'y':self.geometry.y,'Length scape route':self.route_lenght,'Housing':self.housing,'Safe point':self.meating_point},ignore_index=True)
         Family.family_statistics.append(self.family_stats)
 
     @classmethod
@@ -332,13 +338,16 @@ class Street(object):
         return(area*1.55)  #Se considera que con 1.55 personas por m2 se puede transitar libremente
 
     @staticmethod
-    def get_velocity(height):
-        if height<5.6: velocity=3.85
-        elif 5.6<height<=8: velocity=0.91
-        elif 8<height<=11.2: velocity=0.76
-        elif 11.2<height<=14: velocity=0.60
-        elif 14<height<=30: velocity=0.31
-        elif 30<=height: velocity=0.02
+    def get_velocity(height,lenght):
+        pendiente=(height/lenght)*100
+        if pendiente<=5.6: velocity=999999
+        elif 5.6<pendiente<=8: velocity=0.91
+        elif 8<pendiente<=11.2: velocity=0.76
+        elif 11.2<pendiente<=14: velocity=0.60
+        elif 14<pendiente<=30: velocity=0.31
+        elif 30<pendiente: velocity=0.2
+        else:
+            velocity=999999
         return(velocity)
 
     @classmethod
@@ -352,7 +361,7 @@ class Street(object):
             type_street=streets.loc[i]['highway']
             lenght=streets.loc[i]['length']
             capacity=Street.get_capacity(type_street,lenght)
-            velocity=Street.get_velocity(height)
+            velocity=Street.get_velocity(height,lenght)
             Street.streets.append(Street(ID,height,type_street,lenght,capacity,velocity))
             contador+=1
             if contador==control:
@@ -369,6 +378,8 @@ class Building(object):
         self.num_family=0 
         self.state='open'
         self.geometry=geometry
+        self.x=geometry.x
+        self.y=geometry.y
         self.members={'adults':0,'youngs':0,'kids':0,'olds':0,'males':0,'women':0}
 
     
@@ -453,9 +464,13 @@ class Model(object):
         Family.family_statistics=[]
         S = Streams(self.startscape_seed)
         env=simpy.Environment()
+        #Acá reinicio lo que se debe reiniciar para una nueva iteracion
         for family in Family.families:
             family.evacuation_time=0
             family.start_scape=S.generate_startscape_rand(family.members) #Vario el tiempo inicial de escape
+            family.path=[]
+            family.path_time=[]
+            family.path_velocity=[]
             if scenario=='scenario 2': Model.get_route(family,family.prob_go_mt,family.prob_go_bd,family.route_to_bd,family.route_to_mt,family.length_route_to_bd,family.length_route_to_mt) #Vario la ruta de escape
             family.env=env
             family.env.process(family.evacuate())
@@ -472,17 +487,18 @@ class Model(object):
         env.run()
         #Aca se acaba la replica, entonces de aqui debo rescatar las estadisticas de la corrida
         Family.family_statistics_dataframe.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" Family.csv")
-        Family.family_statistics_dataframe=pd.DataFrame(columns=['ID','Path','Delays','Members','People','Start scape time','End scape time','Evacuation time','x','y','Length scape route','Housing','Safe point'])
+
 
         MP_statistics_dataframe=pd.DataFrame(columns=['ID','Members','Persons'])
         for element in MeatingPoint.meating_points:
             MP_statistics_dataframe=MP_statistics_dataframe.append({'ID':element.ID.astype(str),'Members':element.members,'Persons':element.persons},ignore_index=True)
         MP_statistics_dataframe.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" MP.csv")
 
-        BD_statistics_dataframe=pd.DataFrame(columns=['ID','Members','Num Family'])
+        BD_statistics_dataframe=pd.DataFrame(columns=['ID','Members','Num Family','x','y'])
         for element in Building.buildings:
-            BD_statistics_dataframe=BD_statistics_dataframe.append({'ID':element.ID,'Members':element.members,'Num Family':element.num_family},ignore_index=True)
+            BD_statistics_dataframe=BD_statistics_dataframe.append({'ID':element.ID,'Members':element.members,'Num Family':element.num_family,'x':element.x,'y':element.y},ignore_index=True)
         BD_statistics_dataframe.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" BD.csv")
+
         
         # json_family=json.dumps(Family.family_statistics)
         # with open("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" Family.txt",'w') as f:
@@ -561,10 +577,10 @@ if __name__ == '__main__':
     nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
 
     time_sim=500
-    scenarios=[('scenario 2',time_sim)]
-    # scenarios = [('scenario 2',time),('scenario 3',time)]
+    scenarios=[('scenario 1',time_sim)]
+    # scenarios = [('scenario 1',time),('scenario 2',time)]
     # scenarios = [('scenario 1',time),('scenario 2',time),('scenario 3',time_sim)]
-    exp = Experiment(30,scenarios)
+    exp = Experiment(2,scenarios)
     exp.run()
 
 
@@ -574,18 +590,15 @@ total=final-inicio
 print("TERMINO CON TIEMPO ",str(total))
 sys.exit()
 
-
-
-
 #Tester
-family = next(filter(lambda x: x.ID == 8011, Family.families))
-family.meating_point
+# family = next(filter(lambda x: x.ID == 8011, Family.families))
+# family.meating_point
 
 
-for element in Family.families:
-    try:
-        if element.meating_point[1] != 'MP' and element.meating_point[1] != 'BD':
-            pass
-    except:
-        print('Familia {} con punto {}'.format(element.ID,element.meating_point))
+# for element in Family.families:
+#     try:
+#         if element.meating_point[1] != 'MP' and element.meating_point[1] != 'BD':
+#             pass
+#     except:
+#         print('Familia {} con punto {}'.format(element.ID,element.meating_point))
 
