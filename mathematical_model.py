@@ -1,4 +1,4 @@
-from simulacion_2 import Family
+# from simulacion_2 import Family
 import simpy
 import pandas as pd
 import geopandas as gpd
@@ -200,7 +200,7 @@ print("EMPIEZA MODELO OPTI")
 
 #Parametros de las familias
 start=time.time()
-T_exec=30
+T_exec=3600
 olds_fam=[]
 kids_fam=[]
 id_fams=[]
@@ -227,7 +227,6 @@ building_vertex=[]
 buildings[buildings['Base']==90]
 # building_distance=pd.DataFrame()
 for element in Building.buildings:
-    print("Edificio id: ",element.ID)
     cap_bd.append(int(element.capacity))
     id_buildings.append(element.ID)
     building_vertex_temp=get_vertex(element.geometry)
@@ -257,6 +256,7 @@ distances=distances.values
 
 len(Family.families)
 print("Termina carga de datos del modelo y se demoro ",(time.time())-start)
+sys.exit()
 
 
 ####### Variables de decision ##########
@@ -269,10 +269,12 @@ x_varnames = x_vars.flatten()
 x_vartypes = 'B'*len(x_varnames)
 x_varlb = [0.0]*len(x_varnames)
 x_varub = [1.0]*len(x_varnames)
-x_varobj=[(distances[i,j])/(0.7*olds_fam[i]+0.3*kids_fam[i]) for j in range(num_buildings) for i in range(num_families)]
+x_varobj=[0.1*olds_fam[i]+0.9*kids_fam[i] for j in range(num_buildings) for i in range(num_families)]
+
+# mapped=list(zip(x_varobj,olds_fam,kids_fam))
 
 Model.variables.add(obj = x_varobj, lb = x_varlb, ub = x_varub, types = x_vartypes, names = x_varnames)
-Model.objective.set_sense(Model.objective.sense.minimize)
+Model.objective.set_sense(Model.objective.sense.maximize)
 
 
 ####### Restricciones #######
@@ -282,14 +284,14 @@ for j in range(num_buildings):
     val=[num_members[i] for i in range(num_families)]
     Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val = val)], 
                                 senses = ['L'], 
-                                rhs = [cap_bd[j]])
+                                rhs = [cap_bd[j]])      #Restringe la capacidad del edificio
 
 for i in range(num_families):
     ind=[x_vars[i,j] for j in range(num_buildings)]
     val=[1.0 for j in range(num_buildings)]
     Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = ind, val =val )], 
                                 senses = ['E'], 
-                                rhs = [1.0])
+                                rhs = [1.0])        #Restringe que cada familia sea asignada una sola vez
 
 
 # for i in range(num_families):
@@ -300,7 +302,7 @@ for i in range(num_families):
 
 Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind=[x_vars[i,j]],val=[distances[i,j]]) for i in range(num_families) for j in range(num_buildings)], 
                                         senses =['L'for i in range(num_families) for j in range(num_buildings)], 
-                                        rhs = [895 for i in range(num_families) for j in range(num_buildings)])   
+                                        rhs = [895 for i in range(num_families) for j in range(num_buildings)])   #Restringe que la distancia no super los 900 mts
 
 
 
@@ -317,12 +319,22 @@ print("\nObjective Function Value = {}".format(Model.solution.get_objective_valu
 
 print("INICIA CREADOR DE RUTAS")
 start=time.time()
+for i in range(0,10):
+    for j in range(0,10):
+        if(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")")!=0.0):
+            num_familias_asignadas
+
+
+
+
+
+
 #Creacion de rutas de escape
 path={}
 for i in range(0,num_families):
     for j in range(0,num_buildings):
         if(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")")!=0.0):
-            print("x("+str(id_fams[i])+","+str(id_buildings[j])+")"+" = "+str(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")")))
+            # print("x("+str(id_fams[i])+","+str(id_buildings[j])+")"+" = "+str(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")")))
             family_find = next(filter(lambda x: x.housing == id_fams[i], Family.families))
             building_find=next(filter(lambda x: x.ID==id_buildings[j],Building.buildings))
             inicio_id=min_dist(family_find.geometry, nodes_without_buildings)['id']
@@ -340,11 +352,11 @@ for i in range(0,num_families):
 
 
 #Guardar diccionario
-np.save('scape_route_optimal.npy', path)
+np.save('scape_route_optimal_ninos_primero_09.npy', path)
 
-#cargar diccionario
-optimal_scape=np.load('data/scape_route_optimal.npy').item()
-optimal_scape[27350]
+# #cargar diccionario
+# optimal_scape=np.load('data/scape_route_optimal_niños_primero.npy').item()
+# optimal_scape[27350]
 
 print("termina el creador de rutas en tiempo ",(time.time())-start)
 

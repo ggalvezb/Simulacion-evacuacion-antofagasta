@@ -436,6 +436,7 @@ class Model(object):
 
     @staticmethod
     def get_route(family,prob_go_mt,prob_go_bd,route_to_bd,route_to_mt,length_route_to_bd,length_route_to_mt):
+        print(prob_go_bd)
         if prob_go_bd>=0.85:
             family.route=route_to_bd
             family.meating_point=(family.point_bd,'BD')
@@ -487,6 +488,7 @@ class Model(object):
         env.run()
         #Aca se acaba la replica, entonces de aqui debo rescatar las estadisticas de la corrida
         Family.family_statistics_dataframe.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\"+str(self.scenario)+" replica "+str(Model.replica)+" Family.csv")
+        Family.family_statistics_dataframe=pd.DataFrame(columns=['ID','Path','Delays','Members','People','Start scape time','End scape time','Evacuation time','x','y','Length scape route','Housing','Safe point']) #Esto reinicia el dataframe para que no ocupe memoria
 
 
         MP_statistics_dataframe=pd.DataFrame(columns=['ID','Members','Persons'])
@@ -532,6 +534,7 @@ class Replicator(object):
         print("EMPIEZA CONSTRUCCION DE FAMILIA")
         Family.builder_families(route_scenario,scenario)
         print("LARGO DE FAMILIAS {} DE CALLES {} EDIFICIOS {} Y MP {}".format(len(Family.families),len(Street.streets),len(Building.buildings),len(MeatingPoint.meating_points)))
+        sys.exit()
 
         # return [Model(seeds,*params).run(scenario) for seeds in self.seeds], params
         return [Model(seeds,*params).run(scenario) for seeds in self.seeds]
@@ -547,12 +550,12 @@ class Experiment(object):
         for scenario in self.scenarios:
             Replicator(self.seeds).run(scenario)
             # Parallel(n_jobs=cpu, verbose=5)(delayed(Replicator(self.seeds).run(scenario)))
-            # Family.ID=0
-            # Family.families=[]
-            # Street.streets=[]
-            # Building.buildings=[]
-            # MeatingPoint.meating_points=[]
-            # Model.replica=1
+            Family.ID=0
+            Family.families=[]
+            Street.streets=[]
+            Building.buildings=[]
+            MeatingPoint.meating_points=[]
+            Model.replica=1
             
 Family.family_statistics_dataframe
 if __name__ == '__main__':
@@ -577,10 +580,10 @@ if __name__ == '__main__':
     nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
 
     time_sim=500
-    scenarios=[('scenario 1',time_sim)]
-    # scenarios = [('scenario 1',time),('scenario 2',time)]
+    scenarios=[('scenario 3',time_sim)]
+    # scenarios = [('scenario 2',time),('scenario 3',time)]
     # scenarios = [('scenario 1',time),('scenario 2',time),('scenario 3',time_sim)]
-    exp = Experiment(2,scenarios)
+    exp = Experiment(30,scenarios)
     exp.run()
 
 
@@ -591,14 +594,23 @@ print("TERMINO CON TIEMPO ",str(total))
 sys.exit()
 
 #Tester
-# family = next(filter(lambda x: x.ID == 8011, Family.families))
-# family.meating_point
+optimal_scape=np.load('C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\scape_route_optimal_ninos_primero_09.npy').item()
+ninos_edificios=0
+abuelos_edificos=0
+ninos_MP=0
+abuelos_MP=0
+for key in optimal_scape.keys():
+    if optimal_scape[key][1]>=1170:
+        family = next(filter(lambda x: x.housing == key, Family.families))
+        ninos_MP+=family.members['kids']
+        abuelos_MP+=family.members['olds']
+    elif optimal_scape[key][1]<1170:
+        family = next(filter(lambda x: x.housing == key, Family.families))
+        ninos_edificios+=family.members['kids']
+        abuelos_edificos+=family.members['olds']
+print("niños edifico {} y abuelos edificio {}".format(ninos_edificios,abuelos_edificos))
+print("niños MP {} y abuelos MP {}".format(ninos_MP,abuelos_MP))
 
 
-# for element in Family.families:
-#     try:
-#         if element.meating_point[1] != 'MP' and element.meating_point[1] != 'BD':
-#             pass
-#     except:
-#         print('Familia {} con punto {}'.format(element.ID,element.meating_point))
-
+len(Building.buildings)
+len(MeatingPoint.meating_points)
