@@ -203,6 +203,7 @@ start=time.time()
 T_exec=3600
 olds_fam=[]
 kids_fam=[]
+adults_fam=[]
 id_fams=[]
 building_distance=[]
 num_members=[]
@@ -213,6 +214,7 @@ for element in Family.families:
     if element.route_lenght<=500 and (element.members['olds']>0 or element.members['kids']>0):
         olds_fam.append(element.members['olds'])
         kids_fam.append(element.members['kids'])
+        adults_fam.append(element.members['adults'])
         id_fams.append(element.housing)
         num_members.append(element.members['males']+element.members['women'])
         family_vertex.append(get_vertex(element.geometry))
@@ -269,7 +271,7 @@ x_varnames = x_vars.flatten()
 x_vartypes = 'B'*len(x_varnames)
 x_varlb = [0.0]*len(x_varnames)
 x_varub = [1.0]*len(x_varnames)
-x_varobj=[0.1*olds_fam[i]+0.9*kids_fam[i] for j in range(num_buildings) for i in range(num_families)]
+x_varobj=[5*olds_fam[i]+3*kids_fam[i]+adults_fam[i] for j in range(num_buildings) for i in range(num_families)]
 
 # mapped=list(zip(x_varobj,olds_fam,kids_fam))
 
