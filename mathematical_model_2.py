@@ -11,8 +11,6 @@ from cplex import Cplex
 from cplex.exceptions import CplexError
 import igraph
 import sys
-from math import trunc
-
 
 #Cargo datos
 persons_data = pd.read_csv("data/personas_antofagasta.csv")
@@ -149,7 +147,7 @@ Street.builder_streets()
 print("Termina calles")
 Building.builder_building()
 MeatingPoint.builder_Meatinpoint()
-# Family.builder_families()
+Family.builder_families()
 print("Termina creacion de objetos")
 
 
@@ -238,128 +236,126 @@ num_meatingpoints=len(id_meatingpoints)
 building_distance=g.shortest_paths_dijkstra(source=index_fam,target=index_bd,weights=g.es['length'],mode=igraph.ALL)
 meatingpoint_distance=g.shortest_paths_dijkstra(source=index_fam,target=index_mp,weights=g.es['length'],mode=igraph.ALL)
 
-sys.exit() #Pauso todo antes del inicio del modelo
+
+###### ------------------ Variables de decision --------------- ######
+Model=cplex.Cplex()
+print("Empieza la creacion de variables ")
+
+x_vars = np.array([["x("+str(id_fams[i])+","+str(id_buildings[j])+")"  for j in range(0,num_buildings)] for i in range(0,num_families)])
+x_varnames = x_vars.flatten()
+x_vartypes = 'B'*len(x_varnames)
+x_varlb = [0.0]*len(x_varnames)
+x_varub = [1.0]*len(x_varnames)
+# x_varobj=[(5*olds_fam[i]+3*kids_fam[i]+adults_fam[i])-(building_distance[i][j]/100) for j in range(num_buildings) for i in range(num_families)]
+x_varobj=[(3*olds_fam[i]+10*kids_fam[i]+adults_fam[i]) for j in range(0,num_buildings) for i in range(num_families)]
+
+Model.variables.add(obj = x_varobj, lb = x_varlb, ub = x_varub, types = x_vartypes, names = x_varnames)
+
+
+y_vars = np.array([["y("+str(id_fams[i])+","+str(id_meatingpoints[k])+")"  for k in range(0,num_meatingpoints)] for i in range(0,num_families)])
+y_varnames = y_vars.flatten()
+y_vartypes = 'B'*len(y_varnames)
+y_varlb = [0.0]*len(y_varnames)
+y_varub = [1.0]*len(y_varnames)
+# y_varobj=[(5*olds_fam[i]+3*kids_fam[i]+adults_fam[i])-(meatingpoint_distance[i][k]/100) for k in range(0,num_meatingpoints) for i in range(num_families)]
+y_varobj=[(olds_fam[i]+kids_fam[i]+adults_fam[i]) for k in range(num_meatingpoints) for i in range(num_families)]
+
+Model.variables.add(obj = y_varobj, lb = y_varlb, ub = y_varub, types = y_vartypes, names = y_varnames)
+
+Model.objective.set_sense(Model.objective.sense.maximize)
+
+###### ----------- Restricciones ----------- ############
+
+#Asigna a las familias a un solo lugar
+for i in range(num_families):
+    ind_x=[x_vars[i,j] for j in range(num_buildings)]
+    ind_y=[y_vars[i,j] for j in range(num_meatingpoints)]
+    ind=ind_x+ind_y
+    val_x=[1.0 for j in range(num_buildings)]
+    val_y=[1.0 for j in range(num_meatingpoints)]
+    val=val_x+val_y
+    Model.linear_constraints.add(lin_expr=[cplex.SparsePair(ind = ind, val = val)],
+                                senses=['E'],
+                                rhs=[1.0])
+print("Restriccion 1 lista")
+
+#Respeta las capacidades de los edificios
+for j in range(num_buildings):
+    ind=[x_vars[i,j] for i in range(num_families)]
+    val=[num_members[i] for i in range(num_families)]
+    Model.linear_constraints.add(lin_expr=[cplex.SparsePair(ind = ind, val = val)],
+                            senses=['L'],
+                            rhs=[cap_bd[j]])
+print("Restriccion 2 lista")
+
+# #Controla la distancia máxima de familia a edificio
+Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind=[x_vars[i,j]],val=[building_distance[i][j]]) for i in range(num_families) for j in range(num_buildings)], 
+                                        senses =['L'for i in range(num_families) for j in range(num_buildings)], 
+                                        rhs = [1500 for i in range(num_families) for j in range(num_buildings)])   
+print("Restriccion 3 lista")
+
+# #Controla la distancia máxima de familia a punto de encuentro
+Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind=[y_vars[i,k]],val=[meatingpoint_distance[i][k]]) for i in range(num_families) for k in range(num_meatingpoints)], 
+                                        senses =['L'for i in range(num_families) for k in range(num_meatingpoints)], 
+                                        rhs = [1500 for i in range(num_families) for k in range(num_meatingpoints)])   
+print("Restriccion 4 lista")
+
+######### ----------- Resolucion del modelo ------------- ############
+end=time.time()
+print("Termina creacion de modelo con tiempo de ",(time.time())-start)
+
+Model.parameters.timelimit.set(float(T_exec))
+Model.parameters.workmem.set(9000.0)
+print("EMPIEZA SOLVE")
+Model.solve()
+
+print("\nObjective Function Value = {}".format(Model.solution.get_objective_value()))
 
 
 
+###########################################################
+####### --------------- Revision ----------------##########
+###########################################################
 
-    ###### ------------------ Variables de decision --------------- ######
-    Model=cplex.Cplex()
-    print("Empieza la creacion de variables ")
-
-    x_vars = np.array([["x("+str(id_fams[i])+","+str(id_buildings[j])+")"  for j in range(0,num_buildings)] for i in range(0,num_families)])
-    x_varnames = x_vars.flatten()
-    x_vartypes = 'B'*len(x_varnames)
-    x_varlb = [0.0]*len(x_varnames)
-    x_varub = [1.0]*len(x_varnames)
-    # x_varobj=[(5*olds_fam[i]+3*kids_fam[i]+adults_fam[i])-(building_distance[i][j]/100) for j in range(num_buildings) for i in range(num_families)]
-    x_varobj=[(10*olds_fam[i]+3*kids_fam[i]+adults_fam[i]) for j in range(0,num_buildings) for i in range(num_families)]
-
-    Model.variables.add(obj = x_varobj, lb = x_varlb, ub = x_varub, types = x_vartypes, names = x_varnames)
-
-
-    y_vars = np.array([["y("+str(id_fams[i])+","+str(id_meatingpoints[k])+")"  for k in range(0,num_meatingpoints)] for i in range(0,num_families)])
-    y_varnames = y_vars.flatten()
-    y_vartypes = 'B'*len(y_varnames)
-    y_varlb = [0.0]*len(y_varnames)
-    y_varub = [1.0]*len(y_varnames)
-    # y_varobj=[(5*olds_fam[i]+3*kids_fam[i]+adults_fam[i])-(meatingpoint_distance[i][k]/100) for k in range(0,num_meatingpoints) for i in range(num_families)]
-    y_varobj=[(olds_fam[i]+kids_fam[i]+adults_fam[i]) for k in range(num_meatingpoints) for i in range(num_families)]
-
-    Model.variables.add(obj = y_varobj, lb = y_varlb, ub = y_varub, types = y_vartypes, names = y_varnames)
-
-    Model.objective.set_sense(Model.objective.sense.maximize)
-
-    ###### ----------- Restricciones ----------- ############
-
-    #Asigna a las familias a un solo lugar
-    for i in range(num_families):
-        ind_x=[x_vars[i,j] for j in range(num_buildings)]
-        ind_y=[y_vars[i,j] for j in range(num_meatingpoints)]
-        ind=ind_x+ind_y
-        val_x=[1.0 for j in range(num_buildings)]
-        val_y=[1.0 for j in range(num_meatingpoints)]
-        val=val_x+val_y
-        Model.linear_constraints.add(lin_expr=[cplex.SparsePair(ind = ind, val = val)],
-                                    senses=['E'],
-                                    rhs=[1.0])
-    print("Restriccion 1 lista")
-
-    #Respeta las capacidades de los edificios
+######--------- Asignacion y distribucion ------- #########
+abuelos_edificios,ninos_edificios,abuelos_mp,ninos_mp=0,0,0,0
+for i in range(num_families):
+    contador_edificios=0
     for j in range(num_buildings):
-        ind=[x_vars[i,j] for i in range(num_families)]
-        val=[num_members[i] for i in range(num_families)]
-        Model.linear_constraints.add(lin_expr=[cplex.SparsePair(ind = ind, val = val)],
-                                senses=['L'],
-                                rhs=[cap_bd[j]])
-    print("Restriccion 2 lista")
-
-    # #Controla la distancia máxima de familia a edificio
-    Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind=[x_vars[i,j]],val=[building_distance[i][j]]) for i in range(num_families) for j in range(num_buildings)], 
-                                            senses =['L'for i in range(num_families) for j in range(num_buildings)], 
-                                            rhs = [2000 for i in range(num_families) for j in range(num_buildings)])   
-    print("Restriccion 3 lista")
-
-    # #Controla la distancia máxima de familia a punto de encuentro
-    Model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind=[y_vars[i,k]],val=[meatingpoint_distance[i][k]]) for i in range(num_families) for k in range(num_meatingpoints)], 
-                                            senses =['L'for i in range(num_families) for k in range(num_meatingpoints)], 
-                                            rhs = [2000 for i in range(num_families) for k in range(num_meatingpoints)])   
-    print("Restriccion 4 lista")
-
-    ######### ----------- Resolucion del modelo ------------- ############
-    end=time.time()
-    print("Termina creacion de modelo con tiempo de ",(time.time())-start)
-
-    Model.parameters.timelimit.set(float(T_exec))
-    Model.parameters.workmem.set(9000.0)
-    print("EMPIEZA SOLVE")
-    Model.solve()
-
-    print("\nObjective Function Value = {}".format(Model.solution.get_objective_value()))
-
-
-
-    ###########################################################
-    ####### --------------- Revision ----------------##########
-    ###########################################################
-
-    ######--------- Asignacion y distribucion ------- #########
-    abuelos_edificios,ninos_edificios,abuelos_mp,ninos_mp=0,0,0,0
-    for i in range(num_families):
-        contador_edificios=0
-        for j in range(num_buildings):
-            if(round(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")"))==1.0):
+        if(round(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")"))==1.0):
             contador_edificios+=1
             abuelos_edificios+=olds_fam[i]
             ninos_edificios+=kids_fam[i]
+            # print("EDIFICIO")
             
-        contador_mp=0
-        for k in range(num_meatingpoints):
-            if(round(Model.solution.get_values("y("+str(id_fams[i])+","+str(id_meatingpoints[k])+")"))==1.0):
+    contador_mp=0
+    for k in range(num_meatingpoints):
+        if(round(Model.solution.get_values("y("+str(id_fams[i])+","+str(id_meatingpoints[k])+")"))==1.0):
             contador_mp+=1
             abuelos_mp+=olds_fam[i]
             ninos_mp+=kids_fam[i]
-        # print("La familia {} fue asignada {} veces a edificio y {} a mp con {} abuelos y {} niños".format(i,contador_edificios,contador_mp,olds_fam[i],kids_fam[i]))
-        if contador_edificios == 0 and contador_mp ==0:
-            print("La familias {} no fue asignada".format(i))
-    print("Hay {} niños y {} abuelos en EDIFICIOS".format(ninos_edificios,abuelos_edificios))
-    print("Hay {} niños y {} abuelos en mp".format(ninos_mp,abuelos_mp))
+            # print("mp")
+    # print("La familia {} fue asignada {} veces a edificio y {} a mp con {} abuelos y {} niños".format(i,contador_edificios,contador_mp,olds_fam[i],kids_fam[i]))
+    if contador_edificios == 0 and contador_mp ==0:
+        print("La familias {} no fue asignada".format(i))
+print("Hay {} niños y {} abuelos en EDIFICIOS".format(ninos_edificios,abuelos_edificios))
+print("Hay {} niños y {} abuelos en mp".format(ninos_mp,abuelos_mp))
 
-    ###### --------- Capacidad edificios -------#########
-    capacidad_restante=[]
-    capacidad_ocupada=[]
-    for j in range(num_buildings):
-        capacidad_edificio=0
-        for i in range(num_families):
-            if(round(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")"))==1.0):
-                capacidad_edificio+=num_members[i]
-        capacidad_restante.append(cap_bd[j]-capacidad_edificio)
-        capacidad_ocupada.append(capacidad_edificio)
-        if capacidad_edificio>cap_bd[j]:
-            print("En el edificio {} se supera la capacidad con {} y su capacidad es de {}".format(j,capacidad_edificio,cap_bd[j]))
-    capacidad_no_usada=(sum(capacidad_restante)/num_buildings)
-    porcentaje_ocupacion=(sum(capacidad_ocupada)*100)/sum(cap_bd)
-    print("En promedio la capacidad no usada es de {} y el procentaje de ocupacion es {}".format(capacidad_no_usada,porcentaje_ocupacion))
+###### --------- Capacidad edificios -------#########
+capacidad_restante=[]
+capacidad_ocupada=[]
+for j in range(num_buildings):
+    capacidad_edificio=0
+    for i in range(num_families):
+        if(round(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")"))==1.0):
+            capacidad_edificio+=num_members[i]
+    capacidad_restante.append(cap_bd[j]-capacidad_edificio)
+    capacidad_ocupada.append(capacidad_edificio)
+    if capacidad_edificio>cap_bd[j]:
+        print("En el edificio {} se supera la capacidad con {} y su capacidad es de {}".format(j,capacidad_edificio,cap_bd[j]))
+capacidad_no_usada=(sum(capacidad_restante)/num_buildings)
+porcentaje_ocupacion=(sum(capacidad_ocupada)*100)/sum(cap_bd)
+print("En promedio la capacidad no usada es de {} y el procentaje de ocupacion es {}".format(capacidad_no_usada,porcentaje_ocupacion))
 
 
 ###### ------- Distancia de escape -------- ########
@@ -377,8 +373,9 @@ for i in range(num_families):
 #### ---------------- Creacion de rutas ------------------#######
 #################################################################
 
+
 path={}
-for i in range(0,2):
+for i in range(num_families):
     #Saco las ruta si la familia fue asignada a un edificio
     for j in range(0,num_buildings):
         if(round(Model.solution.get_values("x("+str(id_fams[i])+","+str(id_buildings[j])+")"))==1.0):
@@ -414,3 +411,6 @@ for i in range(0,2):
             for z in range(len(shortest_path)):
                 path_id.append(g.es[shortest_path[z]]['id'])
             path[id_fams[i]]=[path_id,id_meatingpoints[k]]
+#Guardar diccionario
+np.save('C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados_modelo_matematico\\scape_route_optimal_ninos_primero.npy', path)
+

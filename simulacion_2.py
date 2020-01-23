@@ -145,7 +145,7 @@ class Family(object):
                     meating_point=(building,'BD')
                 else:
                     meating_point=(building,'MP')
-            else:
+            else: #esto me lo agradeceras en el futuro
                 route=home_to_mt_load[str(object_id)][0]
                 length_route=Family.get_route_length(route)
                 building=int(home_to_mt_load[str(object_id)][1])
