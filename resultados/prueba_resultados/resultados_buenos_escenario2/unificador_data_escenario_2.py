@@ -19,7 +19,7 @@ end_scape_time=[]
 evacuation_time=[]
 length_scape_route=[]
 #Obtengo estadisticas generales 
-for i in range(1,31):
+for i in range(1,100):
     data_familia=pd.read_csv(directorio+'\\scenario 2 replica '+str(i)+' Family.csv',sep=",")
     delay.append(data_familia['Delays'].mean())
     start_scape_time.append(data_familia['Start scape time'].mean())
@@ -34,13 +34,14 @@ length_scape_route_avarage=st.mean(length_scape_route)
 
 
 import matplotlib.pyplot as plt
-num_bins = 10
+num_bins = 7
 n, bins, patches = plt.hist(delay, num_bins, facecolor='blue', alpha=0.5)
 plt.show()
 
 #Saco datos de Familia de un escenario
 data_familia=pd.read_csv(directorio+'\\scenario 2 replica 1 Family.csv',sep=",")
 Lugar_escape=[]
+Adult,Young,Kids,Elders,Males,Women=[],[],[],[],[],[]
 for i in range(len(data_familia)):
     data_familia_transformado=ast.literal_eval(data_familia.loc[i,'Safe point'])
     try:
@@ -50,7 +51,49 @@ for i in range(len(data_familia)):
             Lugar_escape.append("Encuentro")
     except:
         Lugar_escape.append("Encuentro")
+    members_transform=ast.literal_eval(data_familia.loc[i,'Members'])
+    Adult.append(members_transform['adults'])
+    try:
+        Young.append(members_transform['youngs'])
+    except:
+        Young.append(0)
+    try:
+        Elders.append(members_transform['olds'])
+    except:
+        Elders.append(0)
+    try:
+        Kids.append(members_transform['kids'])
+    except:
+        Kids.append(0)
+    try:
+        Males.append(members_transform['males'])
+    except:
+        Males.append(0)
+    try:
+        Women.append(members_transform['women'])
+    except:
+        Women.append(0)
 data_familia['Tipo']=Lugar_escape
+data_familia["Adult"]=Adult
+data_familia["Young"]=Young
+data_familia["Kids"]=Kids
+data_familia["Elders"]=Elders
+data_familia["Males"]=Males
+data_familia["Women"]=Women
+
+
+for i in range(len(data_familia)):
+    if type(ast.literal_eval(data_familia['Safe point'][i])) != tuple:
+        data_familia['Safe point'][i]=(int(data_familia['Safe point'][i]),"MP")
+
+problemas=[]
+for i in range(len(data_familia)):
+    if type(ast.literal_eval(data_familia['Safe point'][i])) != tuple:
+        problemas.append(i)
+        
+
+
+
 data_familia.to_excel("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario2\\prueba FM\\datos_FM.xlsx")
 
 

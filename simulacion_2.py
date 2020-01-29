@@ -219,6 +219,7 @@ class Family(object):
         ################
         # Salen de sus casas
         ################
+        time_1=300
         self.delays=self.start_scape
         self.start_scape_simtime=self.start_scape
         yield self.env.timeout(self.start_scape*60)  
@@ -239,6 +240,12 @@ class Family(object):
                 Family.streets_statistics(self,id_to_search,velocity,street_find.lenght/velocity)
                 yield self.env.timeout(street_find.lenght/velocity)
                 street_find.flow-=1
+                # print("WENAAA ",self.env.now)
+
+                if self.env.now>Colect_streets_stats.time: #Actualizo y guardo flujo en calles
+                    Colect_streets_stats.update_steetsdf_stats(self.scenario)
+                    Colect_streets_stats.time+=200
+
             if len(route_copy)==0: #Final de ruta
                 try:
                     if self.meating_point[1]=='MP': #Llega a punto de encuentro
@@ -318,7 +325,7 @@ class Family(object):
 class Street(object):
     streets=[]
 
-    def __init__(self,ID,height,type_street,lenght,capacity,velocity):
+    def __init__(self,ID,height,type_street,lenght,capacity,velocity,geometry):
         self.ID=ID
         self.flow=0
         self.velocity=velocity
@@ -327,6 +334,7 @@ class Street(object):
         self.lenght=lenght
         self.capacity=int(capacity)  #Si se supera este valor se considera atochado y la calle baja su velocidad a 0.751 m/s
         self.max_flow=0
+        self.geometry=geometry
 
     @staticmethod
     def get_capacity(type_street,lenght):
@@ -360,9 +368,10 @@ class Street(object):
             height=streets.loc[i]['height']
             type_street=streets.loc[i]['highway']
             lenght=streets.loc[i]['length']
+            geometry=streets.loc[i]['geometry']
             capacity=Street.get_capacity(type_street,lenght)
             velocity=Street.get_velocity(height,lenght)
-            Street.streets.append(Street(ID,height,type_street,lenght,capacity,velocity))
+            Street.streets.append(Street(ID,height,type_street,lenght,capacity,velocity,geometry))
             contador+=1
             if contador==control:
                 print("Faltan "+str(len(street_id)-contador)+' para que empiece la simulacion')
@@ -405,6 +414,21 @@ class MeatingPoint(object):
         for i in range(len(meating_points)):
             ID=meating_points.loc[i].OBJECTID
             MeatingPoint.meating_points.append(MeatingPoint(ID))
+
+class Colect_streets_stats(object):
+    streets_df=pd.DataFrame()
+    time=10
+
+    def setup_colects_street():
+        Colect_streets_stats.streets_df['ID']=[element.ID for element in Street.streets]
+        Colect_streets_stats.streets_df['geometry']=[element.geometry for element in Street.streets]
+        Colect_streets_stats.streets_df['Flow']=[element.flow for element in Street.streets]
+
+    def update_steetsdf_stats(scenario):
+        Colect_streets_stats.streets_df['Flow']=[element.flow for element in Street.streets]
+        crs = {'init': 'epsg:5361'}
+        streets_gdf=gpd.GeoDataFrame(Colect_streets_stats.streets_df,crs=crs)
+        streets_gdf.to_file("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\calles\\calles de escenario {} replica {} tiempo {}.shp".format(scenario,Model.replica,Colect_streets_stats.time))
 
 class Streams(object):
     def __init__(self,startscape_seed):
@@ -534,7 +558,7 @@ class Replicator(object):
         print("EMPIEZA CONSTRUCCION DE FAMILIA")
         Family.builder_families(route_scenario,scenario)
         print("LARGO DE FAMILIAS {} DE CALLES {} EDIFICIOS {} Y MP {}".format(len(Family.families),len(Street.streets),len(Building.buildings),len(MeatingPoint.meating_points)))
-        sys.exit()
+        Colect_streets_stats.setup_colects_street()
 
         # return [Model(seeds,*params).run(scenario) for seeds in self.seeds], params
         return [Model(seeds,*params).run(scenario) for seeds in self.seeds]
@@ -556,8 +580,7 @@ class Experiment(object):
             Building.buildings=[]
             MeatingPoint.meating_points=[]
             Model.replica=1
-            
-Family.family_statistics_dataframe
+
 if __name__ == '__main__':
     #Cargo datos
     directory=os.getcwd()
@@ -583,7 +606,7 @@ if __name__ == '__main__':
     scenarios=[('scenario 3',time_sim)]
     # scenarios = [('scenario 2',time),('scenario 3',time)]
     # scenarios = [('scenario 1',time),('scenario 2',time),('scenario 3',time_sim)]
-    exp = Experiment(30,scenarios)
+    exp = Experiment(1,scenarios)
     exp.run()
 
 

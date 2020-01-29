@@ -10,9 +10,9 @@ meating_points_reproyectado=gpd.read_file('C:\\Users\\ggalv\\Desktop\\MP_reproye
 edificios_reproyectado=gpd.read_file('C:\\Users\\ggalv\\Desktop\\MP_reproyectados\\edificios_reproyectados_mundial.shp')
 
 
-data_familia=pd.read_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_ninos_primero\\scenario 3 replica 1 Family.csv")
-data_MP=pd.read_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_ninos_primero\\scenario 3 replica 1 MP.csv")
-data_BD=pd.read_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_ninos_primero\\scenario 3 replica 1 BD.csv")
+data_familia=pd.read_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_abuelos_primero\\scenario 3 replica 1 Family.csv")
+data_MP=pd.read_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_abuelos_primero\\scenario 3 replica 1 MP.csv")
+data_BD=pd.read_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_abuelos_primero\\scenario 3 replica 1 BD.csv")
 
 #Saco datos de Familia de un escenario
 Lugar_escape,Adult,Young,Kids,Elders,Males,Women,Latitud,Longitud=[],[],[],[],[],[],[],[],[]
@@ -64,7 +64,7 @@ data_familia["Women"]=Women
 data_familia['Latitud']=Latitud
 data_familia['Longitud']=Longitud
 
-data_familia.to_excel("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_ninos_primero\\prueba FM\\datos_FM.xlsx")
+data_familia.to_excel("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_abuelos_primero\\prueba FM\\datos_FM.xlsx")
 
 #Saco datos de MP de un escenario 
 MP_ID,X,Y,Adult,Young,Kids,Elders,Males,Women=[],[],[],[],[],[],[],[],[]
@@ -88,7 +88,7 @@ for j in range(len(data_MP)):
     Y.append(meating_point_find['geometry'].y.item())
 diccionario={"MP_ID":MP_ID,"X":X,"Y":Y,"Adult":Adult,"Young":Young,"Kids":Kids,"Elders":Elders,"Males":Males,"Women":Women}
 df=pd.DataFrame(diccionario)
-df.to_excel("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_ninos_primero\\prueba MD\\datos_MP.xlsx")
+df.to_excel("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_abuelos_primero\\prueba MD\\datos_MP.xlsx")
 
 #Saco datos de BD de un escenario 
 BD_ID,X,Y,Adult,Young,Kids,Elders,Males,Women,Num_family=[],[],[],[],[],[],[],[],[],[]
@@ -121,5 +121,5 @@ for j in range(len(data_BD)):
     Y.append(edificios_reproyectado.loc[(data_BD.loc[j,'ID']-1),'geometry'].y)
 diccionario={"BD_ID":BD_ID,"X":X,"Y":Y,"Adult":Adult,"Young":Young,"Kids":Kids,"Elders":Elders,"Males":Males,"Women":Women,"Num_family":Num_family}
 df=pd.DataFrame(diccionario)
-df.to_excel("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_ninos_primero\\prueba BD\\datos_BD.xlsx")
+df.to_excel("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\resultados_buenos_escenario3_abuelos_primero\\prueba BD\\datos_BD.xlsx")
 
