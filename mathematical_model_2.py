@@ -11,6 +11,7 @@ from cplex import Cplex
 from cplex.exceptions import CplexError
 import igraph
 import sys
+from shapely.geometry import Point 
 
 #Cargo datos
 persons_data = pd.read_csv("data/personas_antofagasta.csv")
@@ -32,8 +33,7 @@ meating_points=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTE
 nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_cut_edges/sin_edificios/Antofa_nodes.shp')
 family_parameters=pd.read_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\parametros_modelo_matematico\\datos_familia.csv",index_col=0)
 nodes_without_cut=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_subset2/Antofa_nodes_subset2.shp')
-linea_segura=gpd.read_file("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\tsunami\\Shapefiles\\Tsunami\\Linea_Segura\\Linea_Segura.shp")
-
+linea_segura=gpd.read_file("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\parametros_modelo_matematico\\Linea_Segura_Vertices.shp")
 
 #Creacion de grafo
 g = igraph.Graph(directed = True)
@@ -117,8 +117,6 @@ class Family(object):
         cls.ID=0
         cls.families=[]            
 
-
-
 class Street(object):
     streets=[]
 
@@ -179,7 +177,9 @@ print("Termina creacion de objetos")
 
 start=time.time()
 T_exec=3600
-sys.exit()
+
+
+
 ########## ------------ Parámetros de las familias ------------- ##########
 id_fams=[]
 olds_fam=[]
@@ -193,7 +193,7 @@ control=1
 for element in Family.families:
     if element.route_lenght_to_BD<=500 and element.route_lenght_to_BD<element.route_lenght_to_MP:   #Solo si tiene un edifio más cerca que un PE se agregara a las familias para el modelo
         #obtengo distancia mas cercana a linea segura
-        point=list(house_df['geometry'])[0]
+        point=element.geometry
         inicio_id=min_dist(point, nodes_without_buildings)['id']
         inicio_vertex=g.vs.find(name=str(inicio_id)).index
         final=min_dist(point, linea_segura) #Calculo linea segura más cercana
@@ -224,7 +224,7 @@ dictionary={"id_fams":id_fams,"olds_fam":olds_fam,"kids_fam":kids_fam,"adults_fa
 df=pd.DataFrame(dictionary)
 
 sys.exit()
-# df.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\parametros_modelo_matematico\\datos_familia.csv")
+df.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\parametros_modelo_matematico\\datos_familia_2.csv")
 
 ###### PARAMETROS CARGADOS EXTERNAMENTE
 id_fams=list(family_parameters["id_fams"])
