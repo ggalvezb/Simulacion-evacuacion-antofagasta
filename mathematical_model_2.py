@@ -467,6 +467,9 @@ for i in range(num_families):
 np.save('C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados_modelo_matematico\\scape_route_optimal_ninos_primero_2.npy', path)
 
 
+
+
+
 #################################################################################'
 
 #################################################################################'

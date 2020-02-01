@@ -298,7 +298,7 @@ class Family(object):
                             id_to_search=route_copy.pop(0)
                             street_find = next(filter(lambda x: x.ID == id_to_search, Street.streets))
                             street_find.flow+=1
-                            if street_find.max_flow<street_find.flow: street_find.max_flow=street_find.flow #Actualizo el maimo flujo por calle
+                            if street_find.max_flow<street_find.flow: street_find.max_flow=street_find.flow #Actualizo el maximo flujo por calle
                             if street_find.flow>street_find.capacity: street_find.velocity=0.751 
                             velocity=min(street_find.velocity,self.velocity)
                             Family.streets_statistics(self,id_to_search,velocity,street_find.lenght/velocity)
@@ -318,9 +318,6 @@ class Family(object):
                                 Family.save_stats(self)#Guardo estadisticas
                                 break
                     break
-
-
-
 
 class Street(object):
     streets=[]
@@ -423,9 +420,12 @@ class Colect_streets_stats(object):
         Colect_streets_stats.streets_df['ID']=[element.ID for element in Street.streets]
         Colect_streets_stats.streets_df['geometry']=[element.geometry for element in Street.streets]
         Colect_streets_stats.streets_df['Flow']=[element.flow for element in Street.streets]
+        Colect_streets_stats.streets_df['Max Flow']=[element.max_flow for element in Street.streets]
+
 
     def update_steetsdf_stats(scenario):
         Colect_streets_stats.streets_df['Flow']=[element.flow for element in Street.streets]
+        Colect_streets_stats.streets_df['Max Flow']=[element.max_flow for element in Street.streets]
         crs = {'init': 'epsg:5361'}
         streets_gdf=gpd.GeoDataFrame(Colect_streets_stats.streets_df,crs=crs)
         streets_gdf.to_file("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\resultados\\prueba_resultados\\calles\\calles de escenario {} replica {} tiempo {}.shp".format(scenario,Model.replica,Colect_streets_stats.time))
@@ -617,23 +617,3 @@ print("TERMINO CON TIEMPO ",str(total))
 sys.exit()
 
 #Tester
-optimal_scape=np.load('C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\scape_route_optimal_ninos_primero_09.npy').item()
-ninos_edificios=0
-abuelos_edificos=0
-ninos_MP=0
-abuelos_MP=0
-for key in optimal_scape.keys():
-    if optimal_scape[key][1]>=1170:
-        family = next(filter(lambda x: x.housing == key, Family.families))
-        ninos_MP+=family.members['kids']
-        abuelos_MP+=family.members['olds']
-    elif optimal_scape[key][1]<1170:
-        family = next(filter(lambda x: x.housing == key, Family.families))
-        ninos_edificios+=family.members['kids']
-        abuelos_edificos+=family.members['olds']
-print("niños edifico {} y abuelos edificio {}".format(ninos_edificios,abuelos_edificos))
-print("niños MP {} y abuelos MP {}".format(ninos_MP,abuelos_MP))
-
-
-len(Building.buildings)
-len(MeatingPoint.meating_points)
