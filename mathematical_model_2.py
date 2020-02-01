@@ -34,6 +34,7 @@ nodes_without_buildings=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESI
 family_parameters=pd.read_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\parametros_modelo_matematico\\datos_familia.csv",index_col=0)
 nodes_without_cut=gpd.read_file('C:/Users/ggalv/Google Drive/Respaldo/TESIS MAGISTER/tsunami/Shapefiles/Corrected_Road_Network/Antofa_nodes_subset2/Antofa_nodes_subset2.shp')
 linea_segura=gpd.read_file("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\parametros_modelo_matematico\\Linea_Segura_Vertices.shp")
+linea_segura_distancia=pd.read_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\parametros_modelo_matematico\\distancias_a_linea_seguro.csv")
 
 #Creacion de grafo
 g = igraph.Graph(directed = True)
@@ -179,7 +180,7 @@ start=time.time()
 T_exec=3600
 
 
-
+sys.exit()
 ########## ------------ Parámetros de las familias ------------- ##########
 id_fams=[]
 olds_fam=[]
@@ -192,20 +193,9 @@ contador=0
 control=1
 for element in Family.families:
     if element.route_lenght_to_BD<=500 and element.route_lenght_to_BD<element.route_lenght_to_MP:   #Solo si tiene un edifio más cerca que un PE se agregara a las familias para el modelo
-        #obtengo distancia mas cercana a linea segura
-        point=element.geometry
-        inicio_id=min_dist(point, nodes_without_buildings)['id']
-        inicio_vertex=g.vs.find(name=str(inicio_id)).index
-        final=min_dist(point, linea_segura) #Calculo linea segura más cercana
-        fin_point=final['geometry'] 
-        fin_id=min_dist(fin_point, nodes_without_cut)['id']
-        fin_vertex=g.vs.find(name=str(fin_id)).index
-        shortest_path=g.get_shortest_paths(inicio_vertex, to=fin_vertex, weights=g.es['length'], mode=igraph.OUT, output="epath")[0]
-        path_len=[]
-        for j in range(len(shortest_path)):
-            path_len.append(g.es[shortest_path[j]]['length'])
-        route_lenght_to_safeline=sum(path_len)
-        if route_lenght_to_safeline>300: #Solo si supera los 300 mts se incluye en el modelo
+        housing_id=element.housing
+        dist_min=min(list(linea_segura_distancia.loc[linea_segura_distancia['InputID']==housing_id]['Distance']))
+        if dist_min>300: #Solo si supera los 300 mts se incluye en el modelo
             olds_fam.append(element.members['olds'])
             kids_fam.append(element.members['kids'])
             adults_fam.append(element.members['adults'])
@@ -222,8 +212,6 @@ num_families=len(olds_fam)
 #Guardar datos de familia
 dictionary={"id_fams":id_fams,"olds_fam":olds_fam,"kids_fam":kids_fam,"adults_fam":adults_fam,"num_members":num_members,"index_fam":index_fam}
 df=pd.DataFrame(dictionary)
-
-sys.exit()
 df.to_csv("C:\\Users\\ggalv\\Google Drive\\Respaldo\\TESIS MAGISTER\\Simulacion-evacuacion-antofagasta\\parametros_modelo_matematico\\datos_familia_2.csv")
 
 ###### PARAMETROS CARGADOS EXTERNAMENTE
@@ -401,6 +389,8 @@ for i in range(num_families):
         if(round(Model.solution.get_values("y("+str(id_fams[i])+","+str(id_meatingpoints[k])+")"))==1.0):
             if meatingpoint_distance[i][k]>1500:
                 print("Familia {} supera distancia maxima a mp con {}".format(i,meatingpoint_distance[i][k]))
+
+
 
 #################################################################
 #### ------------ Creador shape dispersion ---------------#######
